@@ -110,3 +110,4 @@ RUN pip install --no-deps git+https://github.com/NVIDIA/Megatron-LM.git@core_v0.
 
 RUN pip install git+https://github.com/volcengine/verl.git@v0.6.0 && \
     pip uninstall -y verl
+
