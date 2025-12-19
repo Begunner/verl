@@ -41,7 +41,7 @@ def test_agent_loop_compute_score():
     with initialize_config_dir(config_dir=os.path.abspath("verl/trainer/config")):
         config = compose("ppo_trainer")
 
-    model_path = os.path.expanduser("~/models/Qwen/Qwen2.5-1.5B-Instruct")
+    model_path = os.path.expanduser("/workspace/models/Qwen2.5-1.5B-Instruct")
     config.data.return_raw_chat = True
     config.actor_rollout_ref.model.path = model_path
     config.actor_rollout_ref.actor.use_dynamic_bsz = True
@@ -56,7 +56,7 @@ def test_agent_loop_compute_score():
     agent_loop_manager = AgentLoopManager(config)
 
     # 2. init dataset and dataloader
-    local_folder = os.path.expanduser("~/data/gsm8k/")
+    local_folder = os.path.expanduser("/workspace/models/gsm8k/")
     data_files = [os.path.join(local_folder, "train.parquet")]
     tokenizer = AutoTokenizer.from_pretrained(model_path)
 

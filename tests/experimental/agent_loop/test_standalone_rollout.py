@@ -33,7 +33,7 @@ def init_config() -> DictConfig:
     config.trainer.n_gpus_per_node = 4
     config.trainer.nnodes = 2
     config.actor_rollout_ref.actor.use_dynamic_bsz = True
-    config.actor_rollout_ref.model.path = os.path.expanduser("~/models/Qwen/Qwen2.5-1.5B-Instruct")
+    config.actor_rollout_ref.model.path = os.path.expanduser("/workspace/models/Qwen2.5-1.5B-Instruct")
     config.actor_rollout_ref.rollout.name = os.environ["ROLLOUT_NAME"]
     config.actor_rollout_ref.rollout.mode = "async"
     config.actor_rollout_ref.rollout.skip_tokenizer_init = False
@@ -108,7 +108,7 @@ def test_hybrid_rollout_with_ep(init_config):
         }
     )
 
-    model_path = os.path.expanduser("~/models/Qwen/Qwen3-30B-A3B-Instruct-2507")
+    model_path = os.path.expanduser("/workspace/models/Qwen3-30B-A3B-Instruct-2507")
     init_config.actor_rollout_ref.model.path = model_path
 
     # parallelism config
