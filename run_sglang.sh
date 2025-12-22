@@ -8,5 +8,5 @@ docker run --gpus all -it --rm \
     -e SGL_DISABLE_TP_MEMORY_INBALANCE_CHECK=True \
     -e NCCL_SHM_DISABLE=1 \
     -e NCCL_P2P_DISABLE=1 \
-    wb-sglang:latest \
+    wb-sglang-cudnn:latest \
     bash
