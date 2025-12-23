@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Avoid cpu worker encounter cuda jit error
+# Avoid cpu worker trigger cuda jit error
 import torch as _torch
 import os
 need_mock_cuda = False
