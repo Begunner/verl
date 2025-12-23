@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # Avoid cpu worker encounter cuda jit error
+import os
 os.environ["TORCH_CUDA_ARCH_LIST"] = "8.0"
 from .agent_loop import AgentLoopBase, AgentLoopManager, AgentLoopWorker, AsyncLLMServerManager
 del os.environ["TORCH_CUDA_ARCH_LIST"]
