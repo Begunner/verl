@@ -42,7 +42,7 @@ RUN pip install nvidia-mathdx
 
 RUN MAX_JOBS=128 pip install -v --disable-pip-version-check --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" git+https://github.com/NVIDIA/apex.git
 
-RUN export NVTE_FRAMEWORK=pytorch && MAX_JOBS=128 NVTE_BUILD_THREADS_PER_JOB=4 pip3 install --resume-retries 999 --no-build-isolation git+https://github.com/NVIDIA/TransformerEngine.git@release_v2.8
+RUN export NVTE_FRAMEWORK=pytorch && MAX_JOBS=128 NVTE_BUILD_THREADS_PER_JOB=4 pip3 install --resume-retries 999 --no-build-isolation git+https://github.com/NVIDIA/TransformerEngine.git@release_v2.11
 
 RUN pip install --upgrade transformers tokenizers
 
@@ -106,7 +106,7 @@ RUN pip3 install nvtx matplotlib liger_kernel
 
 RUN pip install -U git+https://github.com/ISEEKYAN/mbridge.git
 
-RUN pip install --no-deps git+https://github.com/NVIDIA/Megatron-LM.git@core_v0.14.0rc7
+RUN pip install --no-deps git+https://github.com/NVIDIA/Megatron-LM.git@core_v0.15.0
 
 RUN pip install git+https://github.com/volcengine/verl.git@v0.6.0 && \
     pip uninstall -y verl
