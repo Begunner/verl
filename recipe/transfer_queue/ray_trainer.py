@@ -72,7 +72,7 @@ from verl.trainer.ppo.utils import (
     need_reference_policy,
     need_reward_model,
 )
-from verl.utils.checkpoint.checkpoint_manager import (
+from verl.utils.checkpoint_utils import (
     find_latest_ckpt_path,
     should_save_ckpt_esi,
 )

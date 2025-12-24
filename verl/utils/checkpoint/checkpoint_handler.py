@@ -24,7 +24,7 @@ import torch
 
 import verl.utils.hdfs_io as hdfs_io
 from verl.single_controller import WorkerGroup
-from verl.utils.checkpoint.checkpoint_manager import find_latest_ckpt_path, get_checkpoint_tracker_filename
+from verl.utils.checkpoint_utils import find_latest_ckpt_path, get_checkpoint_tracker_filename
 from verl.utils.logger import log_with_rank
 from verl.workers.engine import BaseEngine
 

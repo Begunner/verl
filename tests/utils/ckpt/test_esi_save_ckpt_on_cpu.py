@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timedelta
 from unittest import TestCase
 
-from verl.utils.checkpoint.checkpoint_manager import should_save_ckpt_esi
+from verl.utils.checkpoint_utils import should_save_ckpt_esi
 
 
 class TestShouldSaveCkptEsi(TestCase):

@@ -52,7 +52,7 @@ from verl.trainer.ppo.ray_trainer import (
 from verl.trainer.ppo.reward import compute_reward, compute_reward_async
 from verl.trainer.ppo.utils import Role, WorkerType, need_reference_policy, need_reward_model
 from verl.utils import omega_conf_to_dataclass
-from verl.utils.checkpoint.checkpoint_manager import should_save_ckpt_esi
+from verl.utils.checkpoint_utils import should_save_ckpt_esi
 from verl.utils.debug import marked_timer
 from verl.utils.metric import (
     reduce_metrics,
