@@ -4,6 +4,7 @@ docker run --gpus all -it --rm \
     -v $(pwd):/workspace \
     -v /data00/models:/workspace/models \
     -v /data00/datasets:/workspace/datasets \
+    -v /data00/checkpoints:/workspace/ckpts \
     -w /workspace \
     -e ROLLOUT_NAME=sglang \
     -e PYTHONPATH=$PYTHONPATH:. \
