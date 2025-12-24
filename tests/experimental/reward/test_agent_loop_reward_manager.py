@@ -38,8 +38,8 @@ def test_agent_loop_reward_manager():
     with initialize_config_dir(config_dir=os.path.abspath("verl/trainer/config")):
         config = compose(config_name="ppo_trainer")
 
-    rollout_model_path = os.path.expanduser("~/models/Qwen/Qwen2.5-0.5B-Instruct")
-    reward_model_path = os.path.expanduser("~/models/Qwen/Qwen2.5-1.5B-Instruct")
+    rollout_model_path = os.path.expanduser("/workspace/models/Qwen2.5-0.5B-Instruct")
+    reward_model_path = os.path.expanduser("/workspace/models/Qwen2.5-1.5B-Instruct")
 
     # actor_rollout_ref config
     config.data.return_raw_chat = True
@@ -77,7 +77,7 @@ def test_agent_loop_reward_manager():
     agent_loop_manager = AgentLoopManager(config)
 
     # 2. init test data
-    local_folder = os.path.expanduser("~/data/gsm8k/")
+    local_folder = os.path.expanduser("/workspace/datasets/")
     data_files = [os.path.join(local_folder, "train.parquet")]
     tokenizer = AutoTokenizer.from_pretrained(rollout_model_path)
 
