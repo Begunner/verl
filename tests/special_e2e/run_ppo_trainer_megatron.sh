@@ -8,8 +8,8 @@ export VERL_PPO_LOGGING_LEVEL=INFO
 NUM_GPUS=${NUM_GPUS:-8}
 
 MODEL_ID=${MODEL_ID:-Qwen/Qwen2.5-0.5B}
-MODEL_PATH=${MODEL_PATH:-${HOME}/models/${MODEL_ID}}
-RM_MODEL_PATH=${RM_MODEL_PATH:-${HOME}/models/Skywork/Skywork-Reward-V2-Llama-3.2-1B}
+MODEL_PATH=${MODEL_PATH:-/workspace/models/${MODEL_ID}}
+RM_MODEL_PATH=${RM_MODEL_PATH:-/workspace/models/Skywork/Skywork-Reward-V2-Llama-3.2-1B}
 #huggingface-cli download "${MODEL_ID}" --local-dir "${MODEL_PATH}"
 
 USE_DUMMY_MODEL=${USE_DUMMY_MODEL:-False}
