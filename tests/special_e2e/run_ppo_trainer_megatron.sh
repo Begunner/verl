@@ -28,8 +28,8 @@ if [ "$USE_DUMMY_MODEL" = "True" ]; then
     MODEL_PATH="${DUMMY_MODEL_PATH}"
 fi
 
-TRAIN_FILES=${TRAIN_FILES:-${HOME}/data/gsm8k/train.parquet}
-VAL_FILES=${VAL_FILES:-${HOME}/data/gsm8k/test.parquet}
+TRAIN_FILES=${TRAIN_FILES:-/workspace/datasets/train.parquet}
+VAL_FILES=${VAL_FILES:-/workspace/datasets/test.parquet}
 
 ADV_ESTIMATOR=${ADV_ESTIMATOR:-gae}
 # Validation
