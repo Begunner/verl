@@ -238,7 +238,7 @@ def _load_sglang():
 
     try:
         import vllm  # noqa: F401
-    except (ImportError):
+    except ImportError:
         import sys
         import types
         from unittest.mock import Mock
