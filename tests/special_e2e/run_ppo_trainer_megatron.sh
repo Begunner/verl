@@ -117,7 +117,8 @@ if [ $SKIP_SAVE_HF_MODEL -eq 1 ]; then
 fi
 
 USE_DIST_CKPT=${USE_DIST_CKPT:-False}
-DIST_CKPT_PATH=${DIST_CKPT_PATH:-${HOME}/dist_ckpt/${MODEL_ID}}
+CKPTS_DIR=${CKPTS_DIR:-/workspace/ckpts/${MODEL_ID}}
+DIST_CKPT_PATH=${DIST_CKPT_PATH:-/workspace/dist_ckpt/${MODEL_ID}}
 if [ "$USE_DIST_CKPT" = "True" ]; then
     if [ "$USE_DUMMY_MODEL" = "True" ]; then
         DIST_CKPT_PATH=${HOME}/dist_ckpt_dummy/${MODEL_ID}
@@ -263,6 +264,7 @@ python3 -m verl.trainer.main_ppo --config-path=config \
     trainer.resume_mode="${RESUME_MODE}" \
     trainer.total_epochs=2 \
     trainer.total_training_steps="${TOTAL_TRAIN_STEPS}" \
+    trainer.default_local_dir="${CKPTS_DIR}" \
     global_profiler.profile_continuous_steps=True \
     global_profiler.tool=nsys \
     global_profiler.steps=$PROFILE_STEPS \
