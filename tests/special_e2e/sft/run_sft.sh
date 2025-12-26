@@ -6,11 +6,11 @@ ENTRYPOINT=${ENTRYPOINT:-"-m verl.trainer.fsdp_sft_trainer"}
 NUM_GPUS=${NUM_GPUS:-8}
 
 MODEL_ID=${MODEL_ID:-Qwen/Qwen2.5-0.5B-Instruct}
-MODEL_PATH=${MODEL_PATH:-${HOME}/models/${MODEL_ID}}
+MODEL_PATH=${MODEL_PATH:-/workspace/models/Qwen2.5-0.5B-Instruct}
 #huggingface-cli download "${MODEL_ID}" --local-dir "${MODEL_PATH}"
 
-TRAIN_FILES=${TRAIN_FILES:-$HOME/data/gsm8k/train.parquet}
-VAL_FILES=${VAL_FILES:-$HOME/data/gsm8k/test.parquet}
+TRAIN_FILES=${TRAIN_FILES:-/workspace/datasets/train.parquet}
+VAL_FILES=${VAL_FILES:-/workspace/datasets/test.parquet}
 
 SP_SIZE=${SP_SIZE:-1}
 LIGER=${LIGER:-False}
@@ -27,7 +27,7 @@ NUM_GPUS=8
 
 project_name="verl-test"
 exp_name="$(basename "${MODEL_ID,,}")-sft-minimal"
-ckpts_home=${ckpts_home:-$HOME/${project_name}/${exp_name}}
+ckpts_home=${ckpts_home:-/workspace/ckpts/sft}
 
 mkdir -p "${ckpts_home}"
 
