@@ -13,7 +13,7 @@ else
   COMMAND="python ${ENTRYPOINT} trainer.nnodes=${NNODES:-1} trainer.n_gpus_per_node=${NUM_GPUS:-1}"
 fi
 
-DATASET_DIR=${DATASET_DIR:-~/data/gsm8k_sft}
+DATASET_DIR=${DATASET_DIR:-/workspace/datasets/gsm8k_multi_turn}
 TRAIN_FILES=${DATASET_DIR}/train.parquet
 VAL_FILES=${DATASET_DIR}/test.parquet
 
@@ -23,10 +23,10 @@ project_name=verl_sft_test
 
 RESUME_MODE=disable
 
-ckpts_home=${ckpts_home:-~/verl/test/gsm8k-sft-${backend}}
+ckpts_home=${ckpts_home:-/workspace/ckpts/sft}
 
-MODEL_ID=${MODEL_ID:-Qwen/Qwen2.5-0.5B}
-MODEL_PATH=${MODEL_PATH:-${HOME}/models/${MODEL_ID}}
+MODEL_ID=${MODEL_ID:-Qwen/Qwen2.5-0.5B-Instruct}
+MODEL_PATH=${MODEL_PATH:-/workspace/models/Qwen2.5-0.5B-Instruct}
 #huggingface-cli download "${MODEL_ID}" --local-dir "${MODEL_PATH}"
 
 SP_SIZE=${SP_SIZE:-1}
