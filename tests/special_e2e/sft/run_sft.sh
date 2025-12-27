@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+start_time=$(date +%s)
 set -xeuo pipefail
 
 ENTRYPOINT=${ENTRYPOINT:-"-m verl.trainer.fsdp_sft_trainer"}
@@ -61,3 +62,6 @@ torchrun --standalone --nnodes=1 --nproc_per_node=${NUM_GPUS} ${ENTRYPOINT} \
     trainer.logger=['console'] $@
 
 rm -rf "${ckpts_home:?}/*"
+
+end_time=$(date +%s)
+echo "Total time: $((end_time - start_time)) seconds"
