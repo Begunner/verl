@@ -103,6 +103,10 @@ class MegatronEngine(BaseEngine):
         if self.enable_routing_replay:
             apply_router_replay_patch()
             self.mini_layer_topk_idx_list = []
+        # Apply checkpoint patch for MoE models
+        from verl.models.mcore.patch import apply_patch_checkpoint
+
+        apply_patch_checkpoint()
 
     def _init_device_mesh(self):
         # TODO: set different parallelism for actor, critic, ref
