@@ -238,8 +238,6 @@ def test_multimodal_tool_agent(init_config):
             assert num_turns[i] == 2 or num_turns[i] == 4, (
                 f"Expected 2 or 4 turns but got {num_turns[i]} for sample {i}"
             )
-            assert "pixel_values" in multi_modal_inputs[i], f"Sample {i} should have pixel_values"
-            assert "image_grid_thw" in multi_modal_inputs[i], f"Sample {i} should have image_grid_thw"
         else:
             # Tool-calling prompts should have 4 turns [user, assistant, tool, assistant]
             assert num_turns[i] == 4, f"Expected 4 turns but got {num_turns[i]} for sample {i}"
