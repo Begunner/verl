@@ -484,6 +484,21 @@ def process_weights_after_loading_moe_for_vllm11(self, layer) -> None:
             layer.w2_weight_scale_inv = get_col_major_tma_aligned_tensor(layer.w2_weight_scale_inv)
 
 
+def process_weights_after_loading_moe_for_vllm14(self, layer) -> None:
+    # remove the reentrancy guard here for refit
+
+    # Allow for accessing weights and scales in standard way.
+    w13 = layer.w13_weight
+    w2 = layer.w2_weight
+    w13_scale = getattr(layer, f"w13_{self.weight_scale_name}")
+    w2_scale = getattr(layer, f"w2_{self.weight_scale_name}")
+    w13_input_scale = layer.w13_input_scale
+    w2_input_scale = layer.w2_input_scale
+
+    # Shuffle weights to runtime format and setup kernel.
+    self._setup_kernel(layer, w13, w2, w13_scale, w2_scale, w13_input_scale, w2_input_scale)
+
+
 def apply_vllm_fp8_patches():
     logger.info("Applying vllm fp8 patches for blockwise quantization")
     vllm_ver = version.parse(vllm.__version__)
@@ -501,10 +516,11 @@ def apply_vllm_fp8_patches():
 
     # MoE patch
     func2_path = "vllm.model_executor.layers.quantization.fp8.Fp8MoEMethod.process_weights_after_loading"
-    patcher2 = patch(
-        func2_path,
-        process_weights_after_loading_moe_for_vllm11
-        if vllm_ver >= version.parse("0.11.0")
-        else process_weights_after_loading_moe_for_vllm10,
-    )
+    if vllm_ver >= version.parse("0.14.0"):
+        moe_patch_fn = process_weights_after_loading_moe_for_vllm14
+    elif vllm_ver >= version.parse("0.11.0"):
+        moe_patch_fn = process_weights_after_loading_moe_for_vllm11
+    else:
+        moe_patch_fn = process_weights_after_loading_moe_for_vllm10
+    patcher2 = patch(func2_path, moe_patch_fn)
     patcher2.start()
