@@ -489,7 +489,7 @@ def apply_patch_megatron_v012_with_torch_v28():
 # When using checkpoint + MoE models (like Qwen3-30B-A3B and Qwen3-VL-30B-A3B),
 # input tensors and their grads will stay in gpu memory after forward_backward completes.
 # see https://github.com/NVIDIA/Megatron-LM/pull/3267
-def apply_patch_checkpoint():
+def apply_patch_megatron_recomputation_backward():
     import megatron.core.tensor_parallel.random as rd
     import torch
 
