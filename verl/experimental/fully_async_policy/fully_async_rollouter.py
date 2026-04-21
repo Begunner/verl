@@ -188,6 +188,11 @@ class FullyAsyncRollouter(SeparateRayPPOTrainer):
         # is the most robust workaround.
         self.condition = asyncio.Condition()
         self.lock = self.condition._lock
+        # When partial_rollout is enabled, in-flight long-tail tasks will be aborted+resumed across
+        # parameter syncs anyway, so the drain loop in _processor_worker doesn't need to wait for them
+        # to finish. This event lets reset_staleness wake the drain loop early so new samples can be
+        # submitted to idle replicas while the long-tail tasks keep running in the background.
+        self._sync_interrupt_event = asyncio.Event()
 
     async def set_message_queue_client(self, message_queue_client: MessageQueueClient):
         """Set message queue client"""
@@ -261,6 +266,15 @@ class FullyAsyncRollouter(SeparateRayPPOTrainer):
                 f"idle_ratio: {timing_raw['fully_async/rollouter/idle_ratio']:.4f}"
             )
             self.step_start_time = time.time()
+
+        # If partial_rollout is enabled, wake the drain loop in _processor_worker so it can
+        # exit early and resume submitting new samples to idle replicas. The remaining active
+        # long-tail tasks will keep running in the background and be aborted+resumed by the next
+        # sync. We set the event outside the lock because asyncio.Event.set() is non-blocking
+        # and does not require the lock.
+        if self.config.async_training.get("partial_rollout", False):
+            self._sync_interrupt_event.set()
+
         return timing_raw
 
     def _maybe_log_val_generations(self, inputs, outputs, scores):
@@ -461,6 +475,7 @@ class FullyAsyncRollouter(SeparateRayPPOTrainer):
         """
         Streaming worker coroutines, a sample is submitted for processing without waiting for batches
         """
+        partial_rollout_enabled = self.config.async_training.get("partial_rollout", False)
         while True:
             if self.paused or await self._should_pause_generation():
                 print(
@@ -468,15 +483,59 @@ class FullyAsyncRollouter(SeparateRayPPOTrainer):
                 )
                 async with self.lock:
                     self.paused = True
-                while self.active_tasks:
-                    async with self.lock:
-                        # After acquiring the lock, the number of active_tasks may change, need to be verified again
-                        if self.active_tasks:
-                            done_tasks, self.active_tasks = await asyncio.wait(
-                                self.active_tasks, return_when=asyncio.FIRST_COMPLETED
-                            )
-                            for task in done_tasks:
-                                await task
+                    # Reset the sync-interrupt signal at the start of each drain so we only react
+                    # to syncs that happen during this drain window.
+                    if partial_rollout_enabled:
+                        self._sync_interrupt_event.clear()
+
+                interrupt_future = None
+                try:
+                    if partial_rollout_enabled:
+                        interrupt_future = asyncio.ensure_future(self._sync_interrupt_event.wait())
+
+                    while self.active_tasks:
+                        if partial_rollout_enabled and interrupt_future is not None:
+                            # Wait for either: (a) at least one active task finishes, or
+                            # (b) a parameter sync signals us to break drain early so new
+                            # samples can be submitted to free replicas. We do NOT hold the
+                            # lock during the wait, so reset_staleness can acquire it to
+                            # clear `paused` and update staleness_samples concurrently.
+                            wait_set = set(self.active_tasks) | {interrupt_future}
+                            done, _pending = await asyncio.wait(wait_set, return_when=asyncio.FIRST_COMPLETED)
+                            actual_done = done - {interrupt_future}
+                            if actual_done:
+                                async with self.lock:
+                                    for task in actual_done:
+                                        self.active_tasks.discard(task)
+                                        await task
+                            if interrupt_future in done:
+                                # reset_staleness already set self.paused=False; bail out so the
+                                # outer loop can immediately pop new samples while remaining
+                                # long-tail tasks keep running in the background.
+                                print(
+                                    "[FullyAsyncRollouter][Processor] "
+                                    "Drain interrupted by parameter sync, resuming generation early "
+                                    f"(active long-tail tasks remaining: {len(self.active_tasks)})"
+                                )
+                                break
+                        else:
+                            async with self.lock:
+                                # After acquiring the lock, the number of active_tasks may change,
+                                # need to be verified again.
+                                if self.active_tasks:
+                                    done_tasks, self.active_tasks = await asyncio.wait(
+                                        self.active_tasks, return_when=asyncio.FIRST_COMPLETED
+                                    )
+                                    for task in done_tasks:
+                                        await task
+                finally:
+                    if interrupt_future is not None and not interrupt_future.done():
+                        interrupt_future.cancel()
+                        # Use gather(return_exceptions=True) to swallow CancelledError raised
+                        # from interrupt_future itself, while still letting an outer cancel of
+                        # _processor_worker propagate (gather will be cancelled by the outer
+                        # cancel and re-raise CancelledError out of this finally block).
+                        await asyncio.gather(interrupt_future, return_exceptions=True)
 
                 async with self.lock:
                     while self.paused:
