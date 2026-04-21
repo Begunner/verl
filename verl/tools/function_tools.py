@@ -13,8 +13,9 @@
 # limitations under the License.
 """Demonstration of function-based tool registration.
 
-Listing this module under ``tool_modules:`` in a tool config causes its
-``@function_tool`` decorators to populate the global registry.
+Point the rollout config field ``actor_rollout_ref.rollout.multi_turn.function_tool_path``
+at this file and its ``@function_tool`` decorators will be discovered and
+registered automatically.
 """
 
 from verl.tools.utils.function_tool import function_tool

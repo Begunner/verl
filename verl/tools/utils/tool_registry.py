@@ -23,7 +23,6 @@ from enum import Enum
 from omegaconf import OmegaConf
 
 from verl.tools.schemas import OpenAIFunctionToolSchema
-from verl.tools.utils.function_tool import FUNCTION_TOOL_REGISTRY, get_function_tool
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
@@ -32,7 +31,6 @@ logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
 class ToolType(Enum):
     NATIVE = "native"
     MCP = "mcp"
-    FUNCTION = "function"
 
 
 async def initialize_mcp_tool(tool_cls, tool_config) -> list:
@@ -81,29 +79,6 @@ def get_tool_class(cls_name):
     return tool_cls
 
 
-def _import_tool_modules(module_names):
-    """Import the listed modules so their `@function_tool` decorators run.
-
-    Function-based tools rely on the import side-effect of their module to populate
-    :data:`verl.tools.utils.function_tool.FUNCTION_TOOL_REGISTRY`. Each Ray worker
-    process must import these modules once; placing this in
-    :func:`initialize_tools_from_config` covers that automatically.
-    """
-    if not module_names:
-        return
-    for module_name in module_names:
-        if module_name in sys.modules:
-            continue
-        try:
-            importlib.import_module(module_name)
-            logger.info("Imported function-tool module '%s'", module_name)
-        except Exception as e:
-            raise ImportError(
-                f"Failed to import function-tool module '{module_name}' listed under "
-                f"'tool_modules' in the tool config: {e}"
-            ) from e
-
-
 def initialize_tools_from_config(tools_config_file):
     """Initialize tools from config file.
 
@@ -112,19 +87,15 @@ def initialize_tools_from_config(tools_config_file):
 
     - ``native``: BaseTool subclass loaded by ``class_name``.
     - ``mcp``: MCP tool loaded by ``class_name``.
-    - ``function``: function-based tool looked up by top-level ``name`` in
-      :data:`verl.tools.utils.function_tool.FUNCTION_TOOL_REGISTRY`. The defining
-      modules must be listed under top-level ``tool_modules:`` in the config so
-      they can be imported (which triggers ``@function_tool``).
+
+    Function-based tools (``@function_tool``-decorated Python functions) are
+    not loaded from this yaml; point ``rollout.multi_turn.function_tool_path``
+    at the defining file instead.
 
     For MCP tools, a temporary event loop is created only when needed and
     properly closed after use to prevent memory leaks.
     """
     tools_config = OmegaConf.load(tools_config_file)
-
-    # Import any modules that register function-based tools as a side effect.
-    _import_tool_modules(tools_config.get("tool_modules", []))
-
     tool_list = []
 
     # Lazy initialization for MCP support - only create event loop when needed
@@ -149,23 +120,6 @@ def initialize_tools_from_config(tools_config_file):
     try:
         for tool_config in tools_config.tools:
             tool_type = ToolType(tool_config.config.type)
-
-            if tool_type is ToolType.FUNCTION:
-                tool_name = tool_config.get("name", None)
-                if not tool_name:
-                    raise ValueError(
-                        "Function-tool entries must specify a 'name' field that matches "
-                        "a function registered via @function_tool."
-                    )
-                if tool_name not in FUNCTION_TOOL_REGISTRY:
-                    raise ValueError(
-                        f"Function tool '{tool_name}' not found in FUNCTION_TOOL_REGISTRY. "
-                        f"Available: {sorted(FUNCTION_TOOL_REGISTRY)}. Did you list its module "
-                        f"under 'tool_modules' in the tool config?"
-                    )
-                tool_list.append(get_function_tool(tool_name))
-                continue
-
             cls_name = tool_config.class_name
             tool_cls = get_tool_class(cls_name)
 

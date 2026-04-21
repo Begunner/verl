@@ -11,26 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Lightweight function-based tool registration.
-
-Provides an alternative to subclassing ``BaseTool`` for simple, stateless
-tools that are best expressed as plain Python functions.
-
-A function decorated with :func:`function_tool` is wrapped in a
-:class:`FunctionTool` carrier that mimics the minimal surface the agent loop
-relies on (``name`` + ``tool_schema``).
-The agent loop dispatches function tools directly: it calls the
-underlying function with the parsed JSON arguments and normalizes the return
-value into the ``(ToolResponse, reward, metrics)`` triple expected downstream.
+"""
+Lightweight function-based tool registration.
 """
 
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import inspect
 import json
 import logging
 import os
+import sys
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -46,10 +39,7 @@ logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
 
 
-# Global registry. Populated as a side-effect of importing modules that
-# define ``@function_tool(...)``-decorated functions. The agent loop
-# discovers tools by importing these modules first (see
-# ``initialize_tools_from_config``).
+# global registry
 FUNCTION_TOOL_REGISTRY: dict[str, FunctionTool] = {}
 
 
@@ -142,10 +132,42 @@ def get_function_tool(name: str) -> FunctionTool:
     """Look up a registered function tool by name. Raises ``KeyError`` if absent."""
     if name not in FUNCTION_TOOL_REGISTRY:
         raise KeyError(
-            f"Function tool '{name}' not found in registry. Make sure the module that "
-            f"defines it is listed under 'tool_modules' in the tool config."
+            f"Function tool '{name}' not found in registry. Make sure its defining "
+            f"file is referenced via the rollout `function_tool_path` config."
         )
     return FUNCTION_TOOL_REGISTRY[name]
+
+
+def load_function_tools_from_path(path: str) -> list[FunctionTool]:
+    """Execute a Python file at ``path`` and return all registered function tools."""
+    abs_path = os.path.abspath(path)
+    if not os.path.isfile(abs_path):
+        raise FileNotFoundError(f"function_tool_path does not exist: {path}")
+
+    # Use a path-derived synthetic module name so the imported file can
+    # `from X import Y` its siblings via sys.modules.
+    module_name = "_verl_function_tools_" + abs_path.replace(os.sep, "_").replace(".", "_")
+    spec = importlib.util.spec_from_file_location(module_name, abs_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot create import spec for function_tool_path: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+
+    if not FUNCTION_TOOL_REGISTRY:
+        logger.warning(
+            "function_tool_path '%s' loaded but no @function_tool decorators fired; "
+            "did you forget to apply the decorator?",
+            path,
+        )
+    else:
+        logger.info(
+            "Loaded %d function tool(s) from %s: %s",
+            len(FUNCTION_TOOL_REGISTRY),
+            path,
+            sorted(FUNCTION_TOOL_REGISTRY),
+        )
+    return list(FUNCTION_TOOL_REGISTRY.values())
 
 
 # ---------------------------------------------------------------------------
