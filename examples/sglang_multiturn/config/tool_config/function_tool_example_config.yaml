@@ -1,7 +1,7 @@
 # Example tool config showing the function-based tool registration path.
 #
 # `tool_modules:` list is imported at config-load time, which triggers any
-# `@register_function_tool(...)` decorators inside those modules and populates
+# `@function_tool(...)` decorators inside those modules and populates
 # the global FUNCTION_TOOL_REGISTRY. Each entry under `tools:` then either:
 #
 #   * config.type: function  -> looked up by `name` in the registry (no class_name needed)

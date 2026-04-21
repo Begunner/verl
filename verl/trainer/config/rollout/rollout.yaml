@@ -176,6 +176,9 @@ multi_turn:
   # null for no tool
   tool_config_path: null
 
+  # null for no function tool
+  function_tool_path: null
+
   # null for no limit (default max_length // 3)
   max_user_turns: null
 

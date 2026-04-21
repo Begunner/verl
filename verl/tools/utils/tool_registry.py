@@ -82,7 +82,7 @@ def get_tool_class(cls_name):
 
 
 def _import_tool_modules(module_names):
-    """Import the listed modules so their `@register_function_tool` decorators run.
+    """Import the listed modules so their `@function_tool` decorators run.
 
     Function-based tools rely on the import side-effect of their module to populate
     :data:`verl.tools.utils.function_tool.FUNCTION_TOOL_REGISTRY`. Each Ray worker
@@ -115,7 +115,7 @@ def initialize_tools_from_config(tools_config_file):
     - ``function``: function-based tool looked up by top-level ``name`` in
       :data:`verl.tools.utils.function_tool.FUNCTION_TOOL_REGISTRY`. The defining
       modules must be listed under top-level ``tool_modules:`` in the config so
-      they can be imported (which triggers ``@register_function_tool``).
+      they can be imported (which triggers ``@function_tool``).
 
     For MCP tools, a temporary event loop is created only when needed and
     properly closed after use to prevent memory leaks.
@@ -155,7 +155,7 @@ def initialize_tools_from_config(tools_config_file):
                 if not tool_name:
                     raise ValueError(
                         "Function-tool entries must specify a 'name' field that matches "
-                        "a function registered via @register_function_tool."
+                        "a function registered via @function_tool."
                     )
                 if tool_name not in FUNCTION_TOOL_REGISTRY:
                     raise ValueError(

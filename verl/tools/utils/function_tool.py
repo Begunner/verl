@@ -16,7 +16,7 @@
 Provides an alternative to subclassing ``BaseTool`` for simple, stateless
 tools that are best expressed as plain Python functions.
 
-A function decorated with :func:`register_function_tool` is wrapped in a
+A function decorated with :func:`function_tool` is wrapped in a
 :class:`FunctionTool` carrier that mimics the minimal surface the agent loop
 relies on (``name`` + ``tool_schema``).
 The agent loop dispatches function tools directly: it calls the
@@ -47,7 +47,7 @@ logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
 
 
 # Global registry. Populated as a side-effect of importing modules that
-# define ``@register_function_tool(...)``-decorated functions. The agent loop
+# define ``@function_tool(...)``-decorated functions. The agent loop
 # discovers tools by importing these modules first (see
 # ``initialize_tools_from_config``).
 FUNCTION_TOOL_REGISTRY: dict[str, FunctionTool] = {}
@@ -76,7 +76,7 @@ class FunctionTool:
         return await asyncio.to_thread(self.fn, **parameters)
 
 
-def register_function_tool(
+def function_tool(
     name: Optional[str] = None,
     *,
     description: Optional[str] = None,
@@ -96,7 +96,7 @@ def register_function_tool(
             ``OpenAIFunctionToolSchema`` or a dict matching that shape.
 
     Example:
-        >>> @register_function_tool("web_search")
+        >>> @function_tool("web_search")
         ... def web_search(query: str, top_k: int = 5) -> str:
         ...     '''Search the web for information.
         ...

@@ -14,13 +14,13 @@
 """Demonstration of function-based tool registration.
 
 Listing this module under ``tool_modules:`` in a tool config causes its
-``@register_function_tool`` decorators to populate the global registry.
+``@function_tool`` decorators to populate the global registry.
 """
 
-from verl.tools.utils.function_tool import register_function_tool
+from verl.tools.utils.function_tool import function_tool
 
 
-@register_function_tool("echo")
+@function_tool("echo")
 def echo(text: str) -> str:
     """Echo back the text the caller passed in.
 
@@ -30,7 +30,7 @@ def echo(text: str) -> str:
     return text
 
 
-@register_function_tool("calculator")
+@function_tool("calculator")
 def calculator(expression: str) -> str:
     """Evaluate an arithmetic expression and return the result.
 
