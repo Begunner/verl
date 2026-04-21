@@ -30,6 +30,7 @@ from verl.experimental.agent_loop.agent_loop import (
 from verl.experimental.agent_loop.tool_parser import FunctionCall, ToolParser
 from verl.experimental.agent_loop.utils import build_gpt_oss_tool_response_text
 from verl.tools.schemas import ToolResponse
+from verl.tools.utils.function_tool import FunctionTool, normalize_function_tool_return
 from verl.tools.utils.tool_registry import initialize_tools_from_config
 from verl.utils.profiler import simple_timer
 from verl.utils.rollout_trace import rollout_trace_op
@@ -356,7 +357,13 @@ class ToolAgentLoop(AgentLoopBase):
     async def _call_tool(
         self, tool_call: FunctionCall, tools_kwargs: dict[str, Any], agent_data: AgentData
     ) -> tuple[ToolResponse, float, dict]:
-        """Call tool and return tool response."""
+        """Call tool and return tool response.
+
+        Dispatches between two contracts:
+        - ``FunctionTool``: stateless function-based tool. Invoked directly with
+          parsed arguments; no lifecycle.
+        - ``BaseTool`` subclass: stateful tool with full lifecycle.
+        """
         active_tools = getattr(agent_data, "_active_tools", self.tools)
 
         # Validate tool name
@@ -379,16 +386,27 @@ class ToolAgentLoop(AgentLoopBase):
         tool, instance_id = None, None
         try:
             tool = active_tools[tool_name]
-            kwargs = tools_kwargs.get(tool_name, {})
-            instance_id, _ = await tool.create(create_kwargs=kwargs.get("create_kwargs", {}))
-            tool_execution_response, tool_reward, res = await tool.execute(
-                instance_id, tool_args, agent_data=agent_data
-            )
+
+            if isinstance(tool, FunctionTool):
+                # Function-based tools have no lifecycle; call directly.
+                # Note: tools_kwargs (create_kwargs / release_kwargs) is intentionally
+                # ignored here. Function tools are stateless and per-trajectory state
+                # injection is not supported by design; use a BaseTool subclass instead.
+                raw = await tool.call(tool_args)
+                tool_execution_response, tool_reward, res = normalize_function_tool_return(raw)
+            else:
+                # BaseTool subclass
+                kwargs = tools_kwargs.get(tool_name, {})
+                instance_id, _ = await tool.create(create_kwargs=kwargs.get("create_kwargs", {}))
+                tool_execution_response, tool_reward, res = await tool.execute(
+                    instance_id, tool_args, agent_data=agent_data
+                )
         except Exception as e:
             logger.warning(f"Error executing tool '{tool_name}': {e}")
             return ToolResponse(text=f"Error executing tool '{tool_name}': {e}"), 0.0, {}
         finally:
-            if tool and instance_id:
+            # Only BaseTool instances need release (function tools never set instance_id).
+            if tool and instance_id and not isinstance(tool, FunctionTool):
                 await tool.release(instance_id)
 
         tool_response_text = tool_execution_response.text

@@ -1,0 +1,30 @@
+# Example tool config showing the function-based tool registration path.
+#
+# `tool_modules:` list is imported at config-load time, which triggers any
+# `@register_function_tool(...)` decorators inside those modules and populates
+# the global FUNCTION_TOOL_REGISTRY. Each entry under `tools:` then either:
+#
+#   * config.type: function  -> looked up by `name` in the registry (no class_name needed)
+#   * config.type: native|mcp -> existing behavior, loaded via `class_name`
+
+tool_modules:
+  - verl.tools.function_tools
+
+tools:
+  - name: echo
+    config:
+      type: function
+
+  - name: calculator
+    config:
+      type: function
+
+  # Legacy native tool entry continues to work unchanged:
+  # - class_name: "verl.tools.gsm8k_tool.Gsm8kTool"
+  #   config:
+  #     type: native
+  #   tool_schema:
+  #     type: "function"
+  #     function:
+  #       name: "calc_gsm8k_reward"
+  #       ...
