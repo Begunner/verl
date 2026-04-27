@@ -101,7 +101,15 @@ class ToolAgentLoop(AgentLoopBase):
         function_tool_path = self.rollout_config.multi_turn.get("function_tool_path", None)
         tool_list = initialize_tools_from_config(tool_config_path) if tool_config_path else []
         if function_tool_path:
-            tool_list.extend(load_function_tools_from_path(function_tool_path))
+            existing_names = {tool.name for tool in tool_list}
+            function_tools = load_function_tools_from_path(function_tool_path)
+            collisions = sorted(t.name for t in function_tools if t.name in existing_names)
+            assert not collisions, (
+                f"Function tool name(s) {collisions} from '{function_tool_path}' collide with tools "
+                f"already declared in '{tool_config_path}'. Each tool name must be unique across "
+                f"`tool_config_path` and `function_tool_path`; rename one of them."
+            )
+            tool_list.extend(function_tools)
         self.tools = {tool.name: tool for tool in tool_list}
         self.tool_schemas = [tool.tool_schema.model_dump(exclude_unset=True, exclude_none=True) for tool in tool_list]
         self.tool_parser = ToolParser.get_tool_parser(self.rollout_config.multi_turn.format, self.tokenizer)

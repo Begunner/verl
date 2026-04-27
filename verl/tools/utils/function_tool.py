@@ -42,6 +42,8 @@ logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
 # global registry
 FUNCTION_TOOL_REGISTRY: dict[str, FunctionTool] = {}
 
+_LOADED_FUNCTION_TOOL_PATHS: dict[str, list[FunctionTool]] = {}
+
 
 @dataclass
 class FunctionTool:
@@ -139,13 +141,18 @@ def get_function_tool(name: str) -> FunctionTool:
 
 
 def load_function_tools_from_path(path: str) -> list[FunctionTool]:
-    """Execute a Python file at ``path`` and return all registered function tools."""
+    """Execute a Python file at ``path`` and return its registered function tools."""
     abs_path = os.path.abspath(path)
     if not os.path.isfile(abs_path):
         raise FileNotFoundError(f"function_tool_path does not exist: {path}")
 
+    if abs_path in _LOADED_FUNCTION_TOOL_PATHS:
+        return _LOADED_FUNCTION_TOOL_PATHS[abs_path]
+
+    before = set(FUNCTION_TOOL_REGISTRY)
+
     # Use a path-derived synthetic module name so the imported file can
-    # `from X import Y` its siblings via sys.modules.
+    # ``from X import Y`` its siblings via ``sys.modules``.
     module_name = "_verl_function_tools_" + abs_path.replace(os.sep, "_").replace(".", "_")
     spec = importlib.util.spec_from_file_location(module_name, abs_path)
     if spec is None or spec.loader is None:
@@ -154,27 +161,25 @@ def load_function_tools_from_path(path: str) -> list[FunctionTool]:
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
 
-    if not FUNCTION_TOOL_REGISTRY:
+    new_names = sorted(set(FUNCTION_TOOL_REGISTRY) - before)
+    if not new_names:
         logger.warning(
             "function_tool_path '%s' loaded but no @function_tool decorators fired; "
             "did you forget to apply the decorator?",
             path,
         )
     else:
-        logger.info(
-            "Loaded %d function tool(s) from %s: %s",
-            len(FUNCTION_TOOL_REGISTRY),
-            path,
-            sorted(FUNCTION_TOOL_REGISTRY),
-        )
-    return list(FUNCTION_TOOL_REGISTRY.values())
+        logger.info("Loaded %d function tool(s) from %s: %s", len(new_names), path, new_names)
+
+    tools = [FUNCTION_TOOL_REGISTRY[name] for name in new_names]
+    _LOADED_FUNCTION_TOOL_PATHS[abs_path] = tools
+    return tools
 
 
 # ---------------------------------------------------------------------------
 # Schema inference
 # ---------------------------------------------------------------------------
 
-# Best-effort mapping from a Python type hint to a JSON-schema primitive.
 # Anything not in this map falls back to "string" so the LLM still gets a
 # valid schema even for exotic types.
 _PRIMITIVE_TYPE_MAP: dict[type, str] = {
@@ -249,7 +254,7 @@ def _parse_args_section(docstring: Optional[str]) -> tuple[str, dict[str, str]]:
 def _build_schema_from_fn(
     fn: Callable, tool_name: str, override_description: Optional[str]
 ) -> OpenAIFunctionToolSchema:
-    signature = inspect.signature(fn)
+    signature = inspect.signature(fn, eval_str=True)
     summary, arg_descs = _parse_args_section(fn.__doc__)
     description = override_description or summary or f"Tool '{tool_name}'."
 
@@ -291,22 +296,7 @@ def _build_schema_from_fn(
 
 
 def normalize_function_tool_return(ret: Any) -> tuple[ToolResponse, float, dict]:
-    """Coerce a function's return value into the ``(ToolResponse, reward, metrics)`` triple.
-
-    Conventions:
-
-    ===========================  =================================================
-    Function return              Normalized triple
-    ===========================  =================================================
-    ``str``                      ``(ToolResponse(text=str), 0.0, {})``
-    ``ToolResponse``             ``(ret, 0.0, {})``
-    ``dict``                     ``(ToolResponse(text=json.dumps(ret)), 0.0, {})``
-    1-tuple ``(resp,)``          ``(coerce(resp), 0.0, {})``
-    2-tuple ``(resp, reward)``   ``(coerce(resp), float(reward), {})``
-    3-tuple ``(resp, reward, m)``  pass-through with type coercion
-    other                        ``(ToolResponse(text=str(ret)), 0.0, {})``
-    ===========================  =================================================
-    """
+    """Coerce a function's return value into the ``(ToolResponse, reward, metrics)`` triple."""
     if isinstance(ret, ToolResponse):
         return ret, 0.0, {}
     if isinstance(ret, str):
