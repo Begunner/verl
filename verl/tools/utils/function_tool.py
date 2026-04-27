@@ -176,10 +176,6 @@ def load_function_tools_from_path(path: str) -> list[FunctionTool]:
     return tools
 
 
-# ---------------------------------------------------------------------------
-# Schema inference
-# ---------------------------------------------------------------------------
-
 # Anything not in this map falls back to "string" so the LLM still gets a
 # valid schema even for exotic types.
 _PRIMITIVE_TYPE_MAP: dict[type, str] = {
@@ -288,11 +284,6 @@ def _build_schema_from_fn(
             ),
         ),
     )
-
-
-# ---------------------------------------------------------------------------
-# Return-value normalization
-# ---------------------------------------------------------------------------
 
 
 def normalize_function_tool_return(ret: Any) -> tuple[ToolResponse, float, dict]:
