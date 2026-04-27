@@ -82,18 +82,8 @@ def get_tool_class(cls_name):
 def initialize_tools_from_config(tools_config_file):
     """Initialize tools from config file.
 
-    Each entry under ``tools:`` carries a ``config.type`` discriminator that
-    selects the loader path:
-
-    - ``native``: BaseTool subclass loaded by ``class_name``.
-    - ``mcp``: MCP tool loaded by ``class_name``.
-
-    Function-based tools (``@function_tool``-decorated Python functions) are
-    not loaded from this yaml; point ``rollout.multi_turn.function_tool_path``
-    at the defining file instead.
-
-    For MCP tools, a temporary event loop is created only when needed and
-    properly closed after use to prevent memory leaks.
+    Supports both NATIVE and MCP tool types. For MCP tools, a temporary event loop
+    is created only when needed and properly closed after use to prevent memory leaks.
     """
     tools_config = OmegaConf.load(tools_config_file)
     tool_list = []
@@ -119,8 +109,8 @@ def initialize_tools_from_config(tools_config_file):
 
     try:
         for tool_config in tools_config.tools:
-            tool_type = ToolType(tool_config.config.type)
             cls_name = tool_config.class_name
+            tool_type = ToolType(tool_config.config.type)
             tool_cls = get_tool_class(cls_name)
 
             match tool_type:
@@ -139,7 +129,7 @@ def initialize_tools_from_config(tools_config_file):
                     mcp_tools = run_coroutine(initialize_mcp_tool(tool_cls, tool_config))
                     tool_list.extend(mcp_tools)
                 case _:
-                    raise NotImplementedError(f"Unsupported tool type: {tool_type}")
+                    raise NotImplementedError
     finally:
         # Properly cleanup event loop if it was created
         if tmp_event_loop is not None:
