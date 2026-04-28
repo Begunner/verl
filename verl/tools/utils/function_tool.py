@@ -71,7 +71,7 @@ class FunctionTool:
 
 
 def function_tool(
-    name: Optional[str] = None,
+    name: Optional[str | Callable] = None,
     *,
     description: Optional[str] = None,
     schema: Optional[OpenAIFunctionToolSchema | dict] = None,
@@ -82,54 +82,60 @@ def function_tool(
     Google-style ``Args:`` docstring sections supply types and per-argument
     descriptions. Pass ``schema=`` to override the inferred schema entirely.
 
+    Supports both decorator forms::
+
+        @function_tool                          # bare, name = fn.__name__
+        def web_search(...): ...
+
+        @function_tool("web_search")            # explicit name / kwargs
+        def search(...): ...
+
     Args:
         name: Tool name exposed to the LLM. Defaults to the function name.
+            When used as a bare ``@function_tool`` (no parentheses), this
+            position receives the function being decorated.
         description: Tool description; defaults to the function's docstring
             summary.
         schema: Override the auto-inferred OpenAI schema. Accepts an
             ``OpenAIFunctionToolSchema`` or a dict matching that shape.
-
-    Example:
-        >>> @function_tool("web_search")
-        ... def web_search(query: str, top_k: int = 5) -> str:
-        ...     '''Search the web for information.
-        ...
-        ...     Args:
-        ...         query: The search query.
-        ...         top_k: Maximum number of results.
-        ...     '''
-        ...     return do_search(query, top_k)
     """
 
-    def decorator(fn: Callable):
-        tool_name = name or fn.__name__
+    def _make_decorator(tool_name_override: Optional[str]):
+        def decorator(fn: Callable):
+            tool_name = tool_name_override or fn.__name__
 
-        if isinstance(schema, OpenAIFunctionToolSchema):
-            built_schema = schema
-        elif isinstance(schema, dict):
-            built_schema = OpenAIFunctionToolSchema.model_validate(schema)
-        else:
-            built_schema = _build_schema_from_fn(fn, tool_name, description)
+            if isinstance(schema, OpenAIFunctionToolSchema):
+                built_schema = schema
+            elif isinstance(schema, dict):
+                built_schema = OpenAIFunctionToolSchema.model_validate(schema)
+            else:
+                built_schema = _build_schema_from_fn(fn, tool_name, description)
 
-        entry = FunctionTool(
-            name=tool_name,
-            fn=fn,
-            tool_schema=built_schema,
-            is_async=inspect.iscoroutinefunction(fn),
-        )
-
-        existing = FUNCTION_TOOL_REGISTRY.get(tool_name)
-        if existing is not None and existing.fn is not fn:
-            raise ValueError(
-                f"Function tool '{tool_name}' is already registered to "
-                f"{existing.fn.__module__}.{existing.fn.__qualname__}; "
-                f"refusing to overwrite with {fn.__module__}.{fn.__qualname__}."
+            entry = FunctionTool(
+                name=tool_name,
+                fn=fn,
+                tool_schema=built_schema,
+                is_async=inspect.iscoroutinefunction(fn),
             )
-        FUNCTION_TOOL_REGISTRY[tool_name] = entry
-        logger.info("Registered function tool '%s' from %s.%s", tool_name, fn.__module__, fn.__qualname__)
-        return fn
 
-    return decorator
+            existing = FUNCTION_TOOL_REGISTRY.get(tool_name)
+            if existing is not None and existing.fn is not fn:
+                raise ValueError(
+                    f"Function tool '{tool_name}' is already registered to "
+                    f"{existing.fn.__module__}.{existing.fn.__qualname__}; "
+                    f"refusing to overwrite with {fn.__module__}.{fn.__qualname__}."
+                )
+            FUNCTION_TOOL_REGISTRY[tool_name] = entry
+            logger.info("Registered function tool '%s' from %s.%s", tool_name, fn.__module__, fn.__qualname__)
+            return fn
+
+        return decorator
+
+    if callable(name) and description is None and schema is None:
+        fn = name
+        return _make_decorator(None)(fn)
+
+    return _make_decorator(name)
 
 
 def get_function_tool(name: str) -> FunctionTool:
