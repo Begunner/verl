@@ -1,4 +1,4 @@
-# Copyright 2025 Bytedance Ltd. and/or its affiliates
+# Copyright 2026 Bytedance Ltd. and/or its affiliates
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,11 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Demonstration of function-based tool registration.
+"""Test fixture: ``@function_tool`` examples loaded by the agent-loop tests.
 
-Point the rollout config field ``actor_rollout_ref.rollout.multi_turn.function_tool_path``
-at this file and its ``@function_tool`` decorators will be discovered and
-registered automatically.
+Used as the ``function_tool_path`` target by
+``test_tool_agent_loop_with_function_tools_on_cpu.py``. Two minimal tools
+(``echo``, ``calculator``) are sufficient to exercise both schema inference
+and dispatch.
+
+Not intended as a production tool module; copy the pattern into your own
+file and reference it via the rollout config field
+``actor_rollout_ref.rollout.multi_turn.function_tool_path``.
 """
 
 from verl.tools.utils.function_tool import function_tool
