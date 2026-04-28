@@ -373,6 +373,15 @@ class AgentLoopWorker:
                 teacher_client=teacher_client,
             )
 
+        # Load function-based tools once per worker
+        function_tool_path = self.rollout_config.multi_turn.function_tool_path
+        if function_tool_path:
+            from verl.tools.utils.function_tool import load_function_tools_from_path
+
+            self.function_tools = load_function_tools_from_path(function_tool_path)
+        else:
+            self.function_tools = []
+
         # Load custom agent loop implementations from config path
         agent_loop_config_path = self.rollout_config.agent.agent_loop_config_path
         if agent_loop_config_path:
@@ -506,6 +515,7 @@ class AgentLoopWorker:
                 processor=self.processor,
                 dataset_cls=self.dataset_cls,
                 data_config=DictConfigWrap(self.config.data),
+                function_tools=self.function_tools,
             )
             output: AgentLoopOutput = await agent_loop.run(sampling_params, **kwargs)
             return await self._agent_loop_postprocess(output, trajectory["validate"], **kwargs)

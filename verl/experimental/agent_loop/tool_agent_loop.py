@@ -30,7 +30,7 @@ from verl.experimental.agent_loop.agent_loop import (
 from verl.experimental.agent_loop.tool_parser import FunctionCall, ToolParser
 from verl.experimental.agent_loop.utils import build_gpt_oss_tool_response_text
 from verl.tools.schemas import ToolResponse
-from verl.tools.utils.function_tool import FunctionTool, load_function_tools_from_path, normalize_function_tool_return
+from verl.tools.utils.function_tool import FunctionTool, normalize_function_tool_return
 from verl.tools.utils.tool_registry import initialize_tools_from_config
 from verl.utils.profiler import simple_timer
 from verl.utils.rollout_trace import rollout_trace_op
@@ -88,7 +88,13 @@ class AgentData:
 
 @register("tool_agent")
 class ToolAgentLoop(AgentLoopBase):
-    def __init__(self, *args, **kwargs):
+    # TODO: all tools should be initialized in agent loop worker once
+    def __init__(self, *args, function_tools: Optional[list[FunctionTool]] = None, **kwargs):
+        """Initialize the tool-agent loop.
+
+        Args:
+            function_tools: Function-based tools from ``rollout.multi_turn.function_tool_path``.
+        """
         super().__init__(*args, **kwargs)
 
         # Initialize tools from config file
@@ -98,16 +104,15 @@ class ToolAgentLoop(AgentLoopBase):
         self.max_tool_response_length = self.rollout_config.multi_turn.max_tool_response_length
         self.tool_response_truncate_side = self.rollout_config.multi_turn.tool_response_truncate_side
         tool_config_path = self.rollout_config.multi_turn.tool_config_path
-        function_tool_path = self.rollout_config.multi_turn.function_tool_path
         tool_list = initialize_tools_from_config(tool_config_path) if tool_config_path else []
-        if function_tool_path:
+        # TODO: move this to agent loop worker after refactoring native/mcp tools
+        if function_tools:
             existing_names = {tool.name for tool in tool_list}
-            function_tools = load_function_tools_from_path(function_tool_path)
             collisions = sorted(t.name for t in function_tools if t.name in existing_names)
             assert not collisions, (
-                f"Function tool name(s) {collisions} from '{function_tool_path}' collide with tools "
-                f"already declared in '{tool_config_path}'. Each tool name must be unique across "
-                f"`tool_config_path` and `function_tool_path`; rename one of them."
+                f"Function tool name(s) {collisions} collide with tools already declared in "
+                f"'{tool_config_path}'. Each tool name must be unique across `tool_config_path` "
+                f"and `function_tool_path`; rename one of them."
             )
             tool_list.extend(function_tools)
         self.tools = {tool.name: tool for tool in tool_list}
