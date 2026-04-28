@@ -11,17 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Test fixture: ``@function_tool`` examples loaded by the agent-loop tests.
-
-Used as the ``function_tool_path`` target by
-``test_tool_agent_loop_with_function_tools_on_cpu.py``. Two minimal tools
-(``echo``, ``calculator``) are sufficient to exercise both schema inference
-and dispatch.
-
-Not intended as a production tool module; copy the pattern into your own
-file and reference it via the rollout config field
-``actor_rollout_ref.rollout.multi_turn.function_tool_path``.
-"""
+"""``@function_tool`` examples loaded by the tests."""
 
 from verl.tools.utils.function_tool import function_tool
 
