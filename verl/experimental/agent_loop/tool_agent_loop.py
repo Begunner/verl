@@ -98,7 +98,7 @@ class ToolAgentLoop(AgentLoopBase):
         self.max_tool_response_length = self.rollout_config.multi_turn.max_tool_response_length
         self.tool_response_truncate_side = self.rollout_config.multi_turn.tool_response_truncate_side
         tool_config_path = self.rollout_config.multi_turn.tool_config_path
-        function_tool_path = self.rollout_config.multi_turn.get("function_tool_path", None)
+        function_tool_path = self.rollout_config.multi_turn.function_tool_path
         tool_list = initialize_tools_from_config(tool_config_path) if tool_config_path else []
         if function_tool_path:
             existing_names = {tool.name for tool in tool_list}

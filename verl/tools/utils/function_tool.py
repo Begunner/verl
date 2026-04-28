@@ -24,6 +24,8 @@ import json
 import logging
 import os
 import sys
+import types
+import typing
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -189,12 +191,17 @@ _PRIMITIVE_TYPE_MAP: dict[type, str] = {
 
 
 def _python_type_to_json_type(py_type: Any) -> str:
-    origin = getattr(py_type, "__origin__", None)
-    if origin is not None:
-        if origin is list:
-            return "array"
-        if origin is dict:
-            return "object"
+    origin = typing.get_origin(py_type)
+
+    if origin is typing.Union or (hasattr(types, "UnionType") and origin is types.UnionType):
+        args = [a for a in typing.get_args(py_type) if a is not type(None)]
+        if args:
+            return _python_type_to_json_type(args[0])
+
+    if origin is list:
+        return "array"
+    if origin is dict:
+        return "object"
     return _PRIMITIVE_TYPE_MAP.get(py_type, "string")
 
 
@@ -298,9 +305,9 @@ def normalize_function_tool_return(ret: Any) -> tuple[ToolResponse, float, dict]
         if len(ret) == 1:
             return _coerce_response(ret[0]), 0.0, {}
         if len(ret) == 2:
-            return _coerce_response(ret[0]), float(ret[1]), {}
+            return _coerce_response(ret[0]), float(ret[1] or 0.0), {}
         if len(ret) == 3:
-            return _coerce_response(ret[0]), float(ret[1]), dict(ret[2])
+            return _coerce_response(ret[0]), float(ret[1] or 0.0), dict(ret[2] or {})
     return ToolResponse(text=str(ret)), 0.0, {}
 
 
