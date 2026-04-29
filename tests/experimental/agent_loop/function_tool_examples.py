@@ -16,14 +16,22 @@
 from verl.tools.utils.function_tool import function_tool
 
 
-@function_tool("reverse_string")
-def reverse_string(text: str) -> str:
-    """Reverse a string and return it.
+@function_tool("get_weather")
+def get_weather(city: str) -> dict:
+    """Get the current weather for a city.
 
     Args:
-        text: The string to reverse.
+        city: The city to look up, e.g. "Tokyo" or "San Francisco".
     """
-    return text[::-1]
+    # Stubbed lookup table; in production this would hit a weather API. The
+    # values are deliberately unusual so a test can distinguish a real tool
+    # response from a number the model guessed.
+    table = {
+        "tokyo": {"temperature_c": 17.3, "condition": "drizzle"},
+        "san francisco": {"temperature_c": 14.8, "condition": "fog"},
+        "new york": {"temperature_c": 21.6, "condition": "sunny"},
+    }
+    return table.get(city.lower(), {"temperature_c": -273.15, "condition": "unknown"})
 
 
 @function_tool("calculator")
