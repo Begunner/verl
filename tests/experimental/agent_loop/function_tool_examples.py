@@ -16,14 +16,14 @@
 from verl.tools.utils.function_tool import function_tool
 
 
-@function_tool("echo")
-def echo(text: str) -> str:
-    """Echo back the text the caller passed in.
+@function_tool("reverse_string")
+def reverse_string(text: str) -> str:
+    """Reverse a string and return it.
 
     Args:
-        text: The string to echo back verbatim.
+        text: The string to reverse.
     """
-    return text
+    return text[::-1]
 
 
 @function_tool("calculator")
