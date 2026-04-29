@@ -16,7 +16,7 @@
 from verl.tools.utils.function_tool import function_tool
 
 
-@function_tool("get_weather")
+@function_tool
 def get_weather(city: str) -> dict:
     """Get the current weather for a city.
 
@@ -34,7 +34,7 @@ def get_weather(city: str) -> dict:
     return table.get(city.lower(), {"temperature_c": -273.15, "condition": "unknown"})
 
 
-@function_tool("calculator")
+@function_tool
 def calculator(expression: str) -> str:
     """Evaluate an arithmetic expression and return the result.
 
