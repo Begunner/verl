@@ -25,6 +25,7 @@ from PIL import Image
 from verl.experimental.agent_loop.agent_loop import (
     AgentLoopBase,
     AgentLoopOutput,
+    FunctionToolListWrap,
     register,
 )
 from verl.experimental.agent_loop.tool_parser import FunctionCall, ToolParser
@@ -89,11 +90,13 @@ class AgentData:
 @register("tool_agent")
 class ToolAgentLoop(AgentLoopBase):
     # TODO: all tools should be initialized in agent loop worker once
-    def __init__(self, *args, function_tools: Optional[list[FunctionTool]] = None, **kwargs):
+    def __init__(self, *args, function_tools: Optional[FunctionToolListWrap] = None, **kwargs):
         """Initialize the tool-agent loop.
 
         Args:
-            function_tools: Function-based tools from ``rollout.multi_turn.function_tool_path``.
+            function_tools: Function-based tools from
+                ``rollout.multi_turn.function_tool_path``, wrapped in
+                :class:`FunctionToolListWrap`.
         """
         super().__init__(*args, **kwargs)
 
@@ -105,16 +108,17 @@ class ToolAgentLoop(AgentLoopBase):
         self.tool_response_truncate_side = self.rollout_config.multi_turn.tool_response_truncate_side
         tool_config_path = self.rollout_config.multi_turn.tool_config_path
         tool_list = initialize_tools_from_config(tool_config_path) if tool_config_path else []
+        function_tool_list = function_tools.function_tools if function_tools else []
         # TODO: move this to agent loop worker after refactoring native/mcp tools
-        if function_tools:
+        if function_tool_list:
             existing_names = {tool.name for tool in tool_list}
-            collisions = sorted(t.name for t in function_tools if t.name in existing_names)
+            collisions = sorted(t.name for t in function_tool_list if t.name in existing_names)
             assert not collisions, (
                 f"Function tool name(s) {collisions} collide with tools already declared in "
                 f"'{tool_config_path}'. Each tool name must be unique across `tool_config_path` "
                 f"and `function_tool_path`; rename one of them."
             )
-            tool_list.extend(function_tools)
+            tool_list.extend(function_tool_list)
         self.tools = {tool.name: tool for tool in tool_list}
         self.tool_schemas = [tool.tool_schema.model_dump(exclude_unset=True, exclude_none=True) for tool in tool_list]
         self.tool_parser = ToolParser.get_tool_parser(self.rollout_config.multi_turn.format, self.tokenizer)

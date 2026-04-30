@@ -26,6 +26,7 @@ from verl.tools.schemas import OpenAIFunctionToolSchema, ToolResponse
 from verl.tools.utils import function_tool as function_tool_mod
 from verl.tools.utils.function_tool import (
     FUNCTION_TOOL_REGISTRY,
+    FunctionTool,
     function_tool,
     load_function_tools_from_path,
     normalize_function_tool_return,
@@ -483,3 +484,68 @@ def test_rollout_yaml_exposes_function_tool_path():
     cfg = OmegaConf.load("verl/trainer/config/rollout/rollout.yaml")
     assert "function_tool_path" in cfg.multi_turn
     assert cfg.multi_turn.function_tool_path is None
+
+
+class _HydraProbe:
+    """Module-level probe target for ``hydra.utils.instantiate`` so the
+    regression test below can verify ``FunctionToolListWrap`` survives
+    recursive resolve."""
+
+    def __init__(self, function_tools):
+        self.function_tools = function_tools
+
+
+def test_function_tool_list_wrap_survives_hydra_instantiate(tmp_path):
+    """Regression for the production bug where ``hydra.utils.instantiate``
+    silently converts each ``FunctionTool`` dataclass in a kwarg list into
+    a ``DictConfig``, breaking the ``isinstance(tool, FunctionTool)`` check
+    in ``ToolAgentLoop._call_tool`` and crashing the loop with
+    ``Key 'create' not in 'FunctionTool'``.
+
+    The fix is to wrap the list in :class:`FunctionToolListWrap`, mirroring
+    the existing :class:`DictConfigWrap` pattern. This test pins the
+    contract by driving an actual ``hydra.utils.instantiate`` on a probe
+    target and checking the elements come out the other side as real
+    ``FunctionTool`` instances.
+    """
+    import hydra
+
+    from verl.experimental.agent_loop.agent_loop import FunctionToolListWrap
+
+    path = _write_tool_file(
+        tmp_path,
+        """
+        from verl.tools.utils.function_tool import function_tool
+
+        @function_tool
+        def probe(text: str) -> str:
+            '''Probe.
+
+            Args:
+                text: text.
+            '''
+            return text
+        """,
+    )
+    tools = load_function_tools_from_path(path)
+    assert all(isinstance(t, FunctionTool) for t in tools)
+
+    # Sanity: WITHOUT the wrap, hydra demotes each ``FunctionTool`` to
+    # ``DictConfig``. This is the production crash we're guarding against;
+    # if hydra ever changes behaviour and stops doing this, the assert
+    # below will start failing and the wrap may no longer be necessary.
+    naked = hydra.utils.instantiate({"_target_": f"{__name__}._HydraProbe"}, function_tools=tools)
+    assert not all(isinstance(t, FunctionTool) for t in naked.function_tools), (
+        "hydra.utils.instantiate no longer demotes FunctionTool dataclasses to "
+        "DictConfig. FunctionToolListWrap may be obsolete; revisit and simplify."
+    )
+
+    # WITH the wrap, the elements survive as real dataclass instances, so
+    # ``ToolAgentLoop._call_tool``'s isinstance check works.
+    wrapped = hydra.utils.instantiate(
+        {"_target_": f"{__name__}._HydraProbe"},
+        function_tools=FunctionToolListWrap(tools),
+    )
+    assert isinstance(wrapped.function_tools, FunctionToolListWrap)
+    assert all(isinstance(t, FunctionTool) for t in wrapped.function_tools.function_tools)
+    assert callable(wrapped.function_tools.function_tools[0].fn)
