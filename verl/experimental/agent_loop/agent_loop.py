@@ -385,7 +385,7 @@ class AgentLoopWorker:
         # Load function-based tools once per worker
         function_tool_path = self.rollout_config.multi_turn.function_tool_path
         if function_tool_path:
-            self.function_tools = load_function_tools_from_path(function_tool_path)
+            self.function_tools = load_function_tools_from_path(resolve_config_path(function_tool_path))
         else:
             self.function_tools = []
 

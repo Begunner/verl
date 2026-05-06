@@ -89,6 +89,7 @@ def test_optional_and_union_unwrap_to_inner_type():
         c: int | None = 0,  # PEP 604 + default -> not required
         d: float | str = 1.5,  # multi-arm union + default -> not required
         e: int | str = "x",  # PEP 604 multi-arm + default -> not required
+        f: int | float = 0,  # int|float -> "number" so LLM may emit decimals
     ) -> str:
         """Doc.
 
@@ -98,6 +99,7 @@ def test_optional_and_union_unwrap_to_inner_type():
             c: PEP 604 union with None and a default.
             d: typing.Union of two non-None types with a default.
             e: PEP 604 union of two non-None types with a default.
+            f: numeric union - should resolve to JSON "number".
         """
         return ""
 
@@ -113,6 +115,9 @@ def test_optional_and_union_unwrap_to_inner_type():
     # Multi-arm unions pick the first non-None arm; documenting current behaviour.
     assert props["d"]["type"] == "number"
     assert props["e"]["type"] == "integer"
+    # int|float must upgrade to "number", not "integer", or the LLM will
+    # be told it can't emit decimals.
+    assert props["f"]["type"] == "number"
 
     # Required-list semantics: only the parameter with no default is required.
     # In particular, ``Optional[int]`` alone is still required - the caller

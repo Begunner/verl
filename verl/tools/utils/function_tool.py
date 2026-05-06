@@ -202,6 +202,10 @@ def _python_type_to_json_type(py_type: Any) -> str:
     if origin is typing.Union or (hasattr(types, "UnionType") and origin is types.UnionType):
         args = [a for a in typing.get_args(py_type) if a is not type(None)]
         if args:
+            # If the union mixes int and float (or any float arm), upgrade to
+            # JSON "number" so the LLM is allowed to produce decimals.
+            if any(a is float for a in args):
+                return "number"
             return _python_type_to_json_type(args[0])
 
     if origin is list:

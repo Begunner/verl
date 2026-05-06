@@ -11,7 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""``@function_tool`` examples loaded by the tests."""
+"""``@function_tool`` examples loaded by the tests.
+
+Includes both sync and async functions to exercise the dispatcher's
+``asyncio.iscoroutinefunction`` branch.
+"""
+
+import asyncio
 
 from verl.tools.utils.function_tool import function_tool
 
@@ -62,3 +68,19 @@ def calculator(expression: str) -> str:
         return str(_eval(ast.parse(expression, mode="eval").body))
     except Exception as e:
         return f"ERROR: {e}"
+
+
+@function_tool
+async def fetch_url(url: str) -> str:
+    """Fetch the contents of a URL (async).
+
+    This is a stubbed example that demonstrates ``async def`` tools; the
+    real implementation would use ``aiohttp`` or ``httpx``.
+
+    Args:
+        url: The URL to fetch.
+    """
+    # Yield once so the tool actually behaves like an awaitable, then return
+    # a deterministic stub payload that tests can assert on.
+    await asyncio.sleep(0)
+    return f"<stub body for {url}>"
