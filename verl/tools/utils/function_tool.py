@@ -24,18 +24,12 @@ import json
 import logging
 import os
 import sys
-import types
-import typing
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from verl.tools.schemas import (
-    OpenAIFunctionParametersSchema,
-    OpenAIFunctionPropertySchema,
-    OpenAIFunctionSchema,
-    OpenAIFunctionToolSchema,
-    ToolResponse,
-)
+from transformers.utils import get_json_schema
+
+from verl.tools.schemas import OpenAIFunctionToolSchema, ToolResponse
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
@@ -73,31 +67,37 @@ class FunctionTool:
 def function_tool(
     name: Optional[str | Callable] = None,
     *,
-    description: Optional[str] = None,
     schema: Optional[OpenAIFunctionToolSchema | dict] = None,
 ):
     """Register a Python function as a verl tool.
 
-    The function's signature drives the JSON schema; type hints and
-    Google-style ``Args:`` docstring sections supply types and per-argument
-    descriptions. Pass ``schema=`` to override the inferred schema entirely.
+    The OpenAI tool schema is inferred from the function via
+    :func:`transformers.utils.get_json_schema`, so the function **must** carry:
+
+    - a Google-style docstring summarising the tool;
+    - a ``Args:`` block describing every parameter;
+    - a type hint on every parameter.
+
+    If any of those are missing, ``transformers`` raises
+    ``DocstringParsingException`` / ``TypeHintParsingException`` at
+    registration time.
 
     Supports both decorator forms::
 
         @function_tool                          # bare, name = fn.__name__
         def web_search(...): ...
 
-        @function_tool("web_search")            # explicit name / kwargs
+        @function_tool("web_search")            # rename the tool
         def search(...): ...
 
     Args:
         name: Tool name exposed to the LLM. Defaults to the function name.
             When used as a bare ``@function_tool`` (no parentheses), this
             position receives the function being decorated.
-        description: Tool description; defaults to the function's docstring
-            summary.
-        schema: Override the auto-inferred OpenAI schema. Accepts an
-            ``OpenAIFunctionToolSchema`` or a dict matching that shape.
+        schema: Skip schema inference entirely and use the supplied
+            ``OpenAIFunctionToolSchema`` (or a dict matching that shape) as-is.
+            Use this only if your function's signature can't be expressed in
+            JSON Schema -- the normal path is to fix the function.
     """
 
     def _make_decorator(tool_name_override: Optional[str]):
@@ -109,7 +109,7 @@ def function_tool(
             elif isinstance(schema, dict):
                 built_schema = OpenAIFunctionToolSchema.model_validate(schema)
             else:
-                built_schema = _build_schema_from_fn(fn, tool_name, description)
+                built_schema = _build_schema_from_fn(fn, tool_name)
 
             entry = FunctionTool(
                 name=tool_name,
@@ -131,7 +131,7 @@ def function_tool(
 
         return decorator
 
-    if callable(name) and description is None and schema is None:
+    if callable(name) and schema is None:
         fn = name
         return _make_decorator(None)(fn)
 
@@ -184,127 +184,50 @@ def load_function_tools_from_path(path: str) -> list[FunctionTool]:
     return tools
 
 
-# Anything not in this map falls back to "string" so the LLM still gets a
-# valid schema even for exotic types.
-_PRIMITIVE_TYPE_MAP: dict[type, str] = {
-    str: "string",
-    int: "integer",
-    float: "number",
-    bool: "boolean",
-    list: "array",
-    dict: "object",
-}
+def _build_schema_from_fn(fn: Callable, tool_name: str) -> OpenAIFunctionToolSchema:
+    """Infer the OpenAI tool schema for ``fn`` via transformers.
 
-
-def _python_type_to_json_type(py_type: Any) -> str:
-    origin = typing.get_origin(py_type)
-
-    if origin is typing.Union or (hasattr(types, "UnionType") and origin is types.UnionType):
-        args = [a for a in typing.get_args(py_type) if a is not type(None)]
-        if args:
-            # If the union mixes int and float (or any float arm), upgrade to
-            # JSON "number" so the LLM is allowed to produce decimals.
-            if any(a is float for a in args):
-                return "number"
-            return _python_type_to_json_type(args[0])
-
-    if origin is list:
-        return "array"
-    if origin is dict:
-        return "object"
-    return _PRIMITIVE_TYPE_MAP.get(py_type, "string")
-
-
-def _parse_args_section(docstring: Optional[str]) -> tuple[str, dict[str, str]]:
-    """Parse a Google-style docstring into a (summary, arg_descriptions) pair.
-
-    Recognized argument-section headers: ``Args:``, ``Arguments:``,
-    ``Parameters:`` (case-insensitive). Section ends at any of
-    ``Returns:`` / ``Raises:`` / ``Yields:`` / ``Examples:`` / ``Notes:`` or at
-    a non-indented line.
+    The heavy lifting (signature inspection + Google-style docstring parsing
+    + JSON-Schema type mapping) is delegated to
+    :func:`transformers.utils.get_json_schema`.
     """
-    if not docstring:
-        return "", {}
-
-    lines = inspect.cleandoc(docstring).splitlines()
-    summary_lines: list[str] = []
-    arg_descs: dict[str, str] = {}
-    in_args = False
-    current_arg: Optional[str] = None
-
-    arg_headers = {"args", "arguments", "parameters"}
-    end_headers = {"returns", "return", "raises", "yields", "examples", "example", "note", "notes"}
-
-    for line in lines:
-        stripped = line.strip()
-        header = stripped.lower().rstrip(":")
-        if not in_args:
-            if header in arg_headers:
-                in_args = True
-                continue
-            summary_lines.append(line)
-            continue
-
-        if header in end_headers:
-            break
-        # A non-indented, non-empty line ends the Args section
-        if line and not line[0].isspace() and stripped:
-            break
-
-        if ":" in stripped:
-            arg_part, _, desc = stripped.partition(":")
-            # Strip optional "(type)" annotation, e.g. "name (str): ..."
-            arg_name = arg_part.split("(", 1)[0].strip()
-            if arg_name:
-                arg_descs[arg_name] = desc.strip()
-                current_arg = arg_name
-        elif current_arg and stripped:
-            arg_descs[current_arg] = (arg_descs[current_arg] + " " + stripped).strip()
-
-    return "\n".join(summary_lines).strip(), arg_descs
-
-
-def _build_schema_from_fn(
-    fn: Callable, tool_name: str, override_description: Optional[str]
-) -> OpenAIFunctionToolSchema:
-    signature = inspect.signature(fn, eval_str=True)
-    summary, arg_descs = _parse_args_section(fn.__doc__)
-    description = override_description or summary or f"Tool '{tool_name}'."
-
-    properties: dict[str, OpenAIFunctionPropertySchema] = {}
-    required: list[str] = []
-
-    for param_name, param in signature.parameters.items():
-        # *args / **kwargs are not representable in OpenAI function schemas.
-        if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
-            continue
-
-        annotation = param.annotation if param.annotation is not inspect.Parameter.empty else str
-        json_type = _python_type_to_json_type(annotation)
-
-        properties[param_name] = OpenAIFunctionPropertySchema(
-            type=json_type,
-            description=arg_descs.get(param_name),
+    sig = inspect.signature(fn)
+    variadic = [
+        name
+        for name, p in sig.parameters.items()
+        if p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+    ]
+    if variadic:
+        raise ValueError(
+            f"@function_tool '{tool_name}' ({fn.__module__}.{fn.__qualname__}) "
+            f"declares variadic parameter(s) {variadic}, which can't be "
+            f"expressed in an OpenAI tool schema. Replace them with explicit "
+            f"named parameters."
         )
-        if param.default is inspect.Parameter.empty:
-            required.append(param_name)
 
-    return OpenAIFunctionToolSchema(
-        type="function",
-        function=OpenAIFunctionSchema(
-            name=tool_name,
-            description=description,
-            parameters=OpenAIFunctionParametersSchema(
-                type="object",
-                properties=properties,
-                required=required,
-            ),
-        ),
-    )
+    raw = get_json_schema(fn)
+    raw["function"]["name"] = tool_name
+    return OpenAIFunctionToolSchema.model_validate(raw)
 
 
 def normalize_function_tool_return(ret: Any) -> tuple[ToolResponse, float, dict]:
-    """Coerce a function's return value into the ``(ToolResponse, reward, metrics)`` triple."""
+    """Coerce a function's return value into the ``(ToolResponse, reward, metrics)`` triple.
+
+    Accepted shapes:
+
+    - ``ToolResponse``  -> as-is, reward 0.0, metrics {}
+    - ``str``           -> ``ToolResponse(text=ret)``
+    - ``dict``          -> ``ToolResponse(text=json.dumps(ret))``
+    - ``(response,)`` / ``(response, reward)`` / ``(response, reward, metrics)``
+      -- ``reward`` may be ``None`` (treated as ``0.0``); ``metrics`` may be
+      ``None`` (treated as ``{}``).
+    - anything else     -> ``ToolResponse(text=str(ret))``
+
+    Tuples of length 0 or >= 4 raise ``TypeError`` rather than being silently
+    stringified, since they almost always signal a tool authoring bug.
+    ``None`` is detected via ``is None`` rather than truthiness, so a
+    legitimate ``0`` / ``0.0`` / ``False`` reward is preserved.
+    """
     if isinstance(ret, ToolResponse):
         return ret, 0.0, {}
     if isinstance(ret, str):
@@ -312,12 +235,16 @@ def normalize_function_tool_return(ret: Any) -> tuple[ToolResponse, float, dict]
     if isinstance(ret, dict):
         return ToolResponse(text=json.dumps(ret, ensure_ascii=False)), 0.0, {}
     if isinstance(ret, tuple):
-        if len(ret) == 1:
-            return _coerce_response(ret[0]), 0.0, {}
-        if len(ret) == 2:
-            return _coerce_response(ret[0]), float(ret[1] or 0.0), {}
-        if len(ret) == 3:
-            return _coerce_response(ret[0]), float(ret[1] or 0.0), dict(ret[2] or {})
+        if not 1 <= len(ret) <= 3:
+            raise TypeError(
+                f"@function_tool return tuple must have length 1, 2, or 3 "
+                f"(got length {len(ret)}: {ret!r}). Use (response,), "
+                f"(response, reward), or (response, reward, metrics)."
+            )
+        response = _coerce_response(ret[0])
+        reward = 0.0 if len(ret) < 2 or ret[1] is None else float(ret[1])
+        metrics = {} if len(ret) < 3 or ret[2] is None else dict(ret[2])
+        return response, reward, metrics
     return ToolResponse(text=str(ret)), 0.0, {}
 
 

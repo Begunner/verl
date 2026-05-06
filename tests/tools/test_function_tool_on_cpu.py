@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import textwrap
 from pathlib import Path
-from typing import Optional
+from typing import Literal
 
 import pytest
 
@@ -73,57 +73,54 @@ def test_decorator_registers_with_inferred_schema():
     assert fn_schema["description"].startswith("Greet someone.")
     assert fn_schema["parameters"]["properties"]["name"]["type"] == "string"
     assert fn_schema["parameters"]["properties"]["name"]["description"] == "Person to greet."
-    # Pins the eval_str=True signature inspection: without it, ``bool`` would
-    # come back as the string "bool" and degrade to "string" via the fallback.
     assert fn_schema["parameters"]["properties"]["excited"]["type"] == "boolean"
     assert fn_schema["parameters"]["required"] == ["name"]
 
 
-def test_optional_and_union_unwrap_to_inner_type():
-    """Both type unwrap and required-list semantics for Optional/Union"""
+def test_int_float_union_emits_number_type():
+    """Numeric unions must let the LLM produce decimals.
 
-    @function_tool("opt")
-    def opt(
-        a: Optional[int],  # Optional, no default -> required
-        b: Optional[int] = None,  # Optional + None default -> not required (canonical)
-        c: int | None = 0,  # PEP 604 + default -> not required
-        d: float | str = 1.5,  # multi-arm union + default -> not required
-        e: int | str = "x",  # PEP 604 multi-arm + default -> not required
-        f: int | float = 0,  # int|float -> "number" so LLM may emit decimals
-    ) -> str:
-        """Doc.
+    transformers ``get_json_schema`` returns the JSON Schema-standard
+    ``{"type": ["integer", "number"]}`` for ``int | float``; verl's loosened
+    schema accepts list-typed ``type`` fields so the LLM is allowed to emit
+    decimals rather than being told "must be integer".
+    """
+
+    @function_tool("num")
+    def num(x: int | float) -> str:
+        """Numeric.
 
         Args:
-            a: Optional, no default.
-            b: Optional with None default - the canonical "may be omitted" pattern.
-            c: PEP 604 union with None and a default.
-            d: typing.Union of two non-None types with a default.
-            e: PEP 604 union of two non-None types with a default.
-            f: numeric union - should resolve to JSON "number".
+            x: a numeric value.
         """
-        return ""
+        return str(x)
 
-    params = FUNCTION_TOOL_REGISTRY["opt"].tool_schema.model_dump(exclude_unset=True, exclude_none=True)["function"][
+    params = FUNCTION_TOOL_REGISTRY["num"].tool_schema.model_dump(exclude_unset=True, exclude_none=True)["function"][
         "parameters"
     ]
-    props = params["properties"]
+    assert "number" in params["properties"]["x"]["type"]
 
-    # Type unwrap: Optional / Union arms collapse to the inner JSON type.
-    assert props["a"]["type"] == "integer"
-    assert props["b"]["type"] == "integer"
-    assert props["c"]["type"] == "integer"
-    # Multi-arm unions pick the first non-None arm; documenting current behaviour.
-    assert props["d"]["type"] == "number"
-    assert props["e"]["type"] == "integer"
-    # int|float must upgrade to "number", not "integer", or the LLM will
-    # be told it can't emit decimals.
-    assert props["f"]["type"] == "number"
 
-    # Required-list semantics: only the parameter with no default is required.
-    # In particular, ``Optional[int]`` alone is still required - the caller
-    # must pass a value (possibly None). To get "may be omitted" semantics,
-    # add a default (typically ``= None``).
-    assert params["required"] == ["a"]
+def test_int_literal_emits_int_enum():
+    """``Literal[1, 2, 3]`` -> JSON ``enum: [1, 2, 3]``.
+
+    Pins the verl schema loosening that allows non-string ``enum`` values
+    (otherwise pydantic rejects integer literals).
+    """
+
+    @function_tool("pick")
+    def pick(x: Literal[1, 2, 3]) -> str:
+        """Pick.
+
+        Args:
+            x: pick one.
+        """
+        return str(x)
+
+    props = FUNCTION_TOOL_REGISTRY["pick"].tool_schema.model_dump(exclude_unset=True, exclude_none=True)["function"][
+        "parameters"
+    ]["properties"]
+    assert props["x"]["enum"] == [1, 2, 3]
 
 
 def test_decorator_default_name_uses_function_name():
@@ -206,12 +203,22 @@ def test_explicit_schema_object_override():
 def test_duplicate_name_raises():
     @function_tool("dup")
     def fn1(x: str) -> str:
+        """Doc.
+
+        Args:
+            x: a string.
+        """
         return x
 
     with pytest.raises(ValueError, match="already registered"):
 
         @function_tool("dup")
         def fn2(x: str) -> str:
+            """Doc.
+
+            Args:
+                x: a string.
+            """
             return x
 
 
@@ -245,13 +252,80 @@ def test_sync_function_runs_in_thread():
     assert asyncio.run(tool.call({"text": "hi"})) == "HI"
 
 
-def test_inferred_description_falls_back_to_placeholder_without_docstring():
-    @function_tool("nodoc")
-    def nodoc(x: str) -> str:
-        return x
+def test_missing_docstring_raises_at_registration():
+    """Schema inference is delegated to ``transformers.get_json_schema``,
+    which raises ``DocstringParsingException`` when the function has no
+    docstring at all. We verify the contract surfaces, not the exact
+    exception type, to avoid coupling tests to transformers internals.
+    """
 
-    fn_schema = FUNCTION_TOOL_REGISTRY["nodoc"].tool_schema.model_dump()["function"]
-    assert fn_schema["description"] == "Tool 'nodoc'."
+    with pytest.raises(Exception, match=r"no docstring"):
+
+        @function_tool("nodoc")
+        def nodoc(x: str) -> str:
+            return x
+
+
+def test_missing_type_hint_raises_at_registration():
+    """``transformers.get_json_schema`` raises when a parameter is unannotated."""
+
+    with pytest.raises(Exception, match=r"missing a type hint"):
+
+        @function_tool("untyped")
+        def untyped(x) -> str:
+            """Doc.
+
+            Args:
+                x: a thing.
+            """
+            return x
+
+
+def test_missing_arg_description_raises_at_registration():
+    """``transformers.get_json_schema`` requires every parameter to be
+    described in the docstring's ``Args:`` block."""
+
+    with pytest.raises(Exception, match=r"no description for the argument"):
+
+        @function_tool("partial")
+        def partial(x: int, y: int) -> int:
+            """Add.
+
+            Args:
+                x: only x described.
+            """
+            return x + y
+
+
+def test_var_args_raises_at_registration():
+    """``*args`` / ``**kwargs`` can't be expressed as fixed JSON properties.
+
+    We catch this before ``get_json_schema`` so the user gets a verl-specific
+    pointer to the right fix (``param: list[T]``) instead of transformers'
+    less actionable "missing type hint for args".
+    """
+
+    with pytest.raises(ValueError, match=r"variadic parameter"):
+
+        @function_tool("varargs")
+        def varargs(x: int, *args: int) -> int:
+            """Sum.
+
+            Args:
+                x: x.
+            """
+            return x + sum(args)
+
+    with pytest.raises(ValueError, match=r"variadic parameter"):
+
+        @function_tool("varkw")
+        def varkw(x: int, **kwargs: int) -> int:
+            """Sum.
+
+            Args:
+                x: x.
+            """
+            return x + sum(kwargs.values())
 
 
 # ---------------------------------------------------------------------------
@@ -464,6 +538,38 @@ def test_normalize_tuple_tolerates_none_reward_and_metrics():
     assert resp.text == "text"
     assert reward == 0.0
     assert metrics == {}
+
+
+def test_normalize_falsy_reward_is_preserved_not_coerced_to_default():
+    """Regression: detect ``None`` via ``is None``, not truthiness.
+
+    The earlier ``ret[1] or 0.0`` form swallowed every falsy reward value
+    including ``False`` and integer ``0``, so a tool that legitimately
+    reported "no progress this turn" via ``reward=0`` or ``reward=False``
+    was indistinguishable from one that returned ``reward=None`` -- and
+    more importantly, distinct from the ``or``-fallback path semantically.
+    """
+    # int 0 is the canonical "no signal" reward; must round-trip as 0.0,
+    # and importantly come out of the ``int -> float`` branch, not the
+    # ``or 0.0`` branch.
+    _, reward, _ = normalize_function_tool_return(("t", 0))
+    assert reward == 0.0
+    assert isinstance(reward, float)
+
+    # bool is a subclass of int so ``False`` is technically valid here.
+    _, reward, _ = normalize_function_tool_return(("t", False))
+    assert reward == 0.0
+
+
+def test_normalize_tuple_of_invalid_length_raises():
+    """0-length and >=4-length tuples almost always indicate a bug; we
+    refuse rather than silently ``str(ret)``-ing the entire tuple, which
+    would corrupt the ToolResponse shown to the LLM."""
+    with pytest.raises(TypeError, match=r"length 1, 2, or 3"):
+        normalize_function_tool_return(())
+
+    with pytest.raises(TypeError, match=r"length 1, 2, or 3"):
+        normalize_function_tool_return(("a", 1, {}, "extra"))
 
 
 def test_normalize_arbitrary_object_falls_back_to_str():

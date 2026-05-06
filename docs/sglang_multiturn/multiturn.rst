@@ -125,7 +125,7 @@ Overall, you may refer to mcp_search_tool.py_ and mcp_tool_config.yaml_ for cust
 Function Tool Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For stateless tools, defining a full ``BaseTool`` subclass plus a yaml schema is overkill. The ``@function_tool`` decorator lets you register a plain Python function as a tool; verl infers the OpenAI tool schema from the function signature and Google-style docstring.
+For stateless tools, defining a full ``BaseTool`` subclass plus a yaml schema is overkill. The ``@function_tool`` decorator lets you register a plain Python function as a tool; verl delegates schema inference to :func:`transformers.utils.get_json_schema`, which reads the function signature and a Google-style docstring.
 
 A typical configuration:
 
@@ -167,11 +167,14 @@ Define your tools in ``path/to/your_tools.py``. The decorator works either bare 
 
 A few notes on the inferred schema:
 
-- Parameter types come from the function's type annotations (``str``, ``int``, ``float``, ``bool``, ``list``, ``dict``); ``Optional[X]`` and ``X | None`` collapse to the underlying primitive.
+- Parameter types come from the function's type annotations. Beyond the primitives (``str``, ``int``, ``float``, ``bool``), generic and union forms work too: ``list[T]`` / ``dict[K, V]``, ``Optional[X]`` / ``X | None`` (yields ``nullable``), ``int | float`` (yields the JSON ``["integer", "number"]`` type), ``Literal["a", "b"]`` (yields ``enum``).
 - Per-argument descriptions come from the ``Args:`` section of the docstring.
 - Parameters without a default value are marked ``required``.
-- Pass ``schema=`` to the decorator if you want to bypass inference and supply your own ``OpenAIFunctionToolSchema`` (or a dict with the same shape).
 - The function may be sync or async; sync functions are dispatched through ``asyncio.to_thread`` so they don't block the event loop.
+- ``*args`` / ``**kwargs`` are not representable in JSON Schema and will be rejected at registration time. Use a ``param: list[T]`` argument instead for variable-length inputs.
+- Pass ``schema=`` to the decorator if you want to bypass inference entirely and supply your own ``OpenAIFunctionToolSchema`` (or a dict with the same shape).
+
+If the function violates ``transformers.get_json_schema``'s contract -- no docstring, missing type hint on a parameter, or a parameter that isn't documented in ``Args:`` -- registration raises a ``DocstringParsingException`` or ``TypeHintParsingException`` that points at the offending function. Fix the function rather than catching the exception.
 
 Return values are normalised the same way for every function tool:
 
