@@ -172,7 +172,7 @@ def load_function_tools_from_path(path: str) -> list[FunctionTool]:
     new_names = sorted(set(FUNCTION_TOOL_REGISTRY) - before)
     if not new_names:
         logger.warning(
-            "function_tool_path '%s' loaded but no @function_tool decorators fired; "
+            "function_tool_path '%s' loaded but no @function_tool decorators found; "
             "did you forget to apply the decorator?",
             path,
         )
