@@ -394,7 +394,7 @@ def test_no_decorator_logs_warning(tmp_path, caplog):
     with caplog.at_level("WARNING"):
         tools = load_function_tools_from_path(path)
     assert tools == []
-    assert any("no @function_tool decorators fired" in rec.getMessage() for rec in caplog.records)
+    assert any("no @function_tool decorators found" in rec.getMessage() for rec in caplog.records)
 
 
 def test_load_is_idempotent_across_calls(tmp_path):
