@@ -1,6 +1,6 @@
-# sgl0512
+# sgl0515
 
-FROM lmsysorg/sglang:v0.5.12
+FROM lmsysorg/sglang:v0.5.15.post1
 
 ARG CUDA_VERSION=13.0.2
 ARG TRL_VERSION=0.27.0
@@ -9,6 +9,7 @@ ARG FLASH_ATTENTION_VERSION=2.8.3
 ARG NSIGHT_VERSION=2025.6.1
 ARG MCORE_VERSION=core_v0.18.0
 ARG VERL_VERSION=v0.7.1
+ARG TQ_VERSION=0.1.9
 
 # =========================
 # Install cuDNN (network repo)
@@ -45,7 +46,7 @@ RUN if [ "$(uname -m)" = "aarch64" ]; then \
         pip uninstall -y "flash-attn-4"; \
     fi
 
-RUN pip install --no-build-isolation flash_attn==2.8.3
+RUN pip install --no-build-isolation flash_attn==${FLASH_ATTENTION_VERSION}
 
 RUN NSIGHT_VERSION=2025.6.1_2025.6.1.190-1_$(if [ "$(uname -m)" = "aarch64" ]; then echo "arm64"; else echo "amd64"; fi) && \
     wget https://developer.nvidia.com/downloads/assets/tools/secure/nsight-systems/2025_6/nsight-systems-${NSIGHT_VERSION}.deb && \
@@ -59,7 +60,7 @@ RUN NSIGHT_VERSION=2025.6.1_2025.6.1.190-1_$(if [ "$(uname -m)" = "aarch64" ]; t
 
 # sglang image has already installed DeepEP
 
-RUN pip3 install --no-deps trl==0.27.0
+RUN pip3 install --no-deps trl==${TRL_VERSION}
 
 RUN pip3 install nvtx matplotlib liger_kernel
 
@@ -67,18 +68,13 @@ RUN pip install torchcodec --index-url=https://download.pytorch.org/whl/cu130
 
 RUN pip install qwen-vl-utils==0.0.14
 
-RUN if [ "$(uname -m)" = "aarch64" ]; then \
-        pip show "sglang-kernel"; \
-    else \
-        wget https://github.com/sgl-project/whl/releases/download/v0.4.2.post2/sglang_kernel-0.4.2.post2+cu130-cp310-abi3-manylinux2014_x86_64.whl#sha256=4e7ce619274234d182b20da883fcf1d20e7e55cbea90d62244e2b6a3d6c0fc85 && \
-        pip install sglang_kernel-0.4.2.post2+cu130-cp310-abi3-manylinux2014_x86_64.whl --force-reinstall; \
-    fi
-
 RUN pip install -U git+https://github.com/ISEEKYAN/mbridge.git@main
 
 RUN pip install --no-deps megatron-bridge==0.5.0
 
 RUN pip install --no-deps git+https://github.com/NVIDIA/Megatron-LM.git@${MCORE_VERSION}
+
+RUN pip install --no-deps TransferQueue==${TQ_VERSION}
 
 RUN pip install git+https://github.com/verl-project/verl.git@${VERL_VERSION} && \
     pip uninstall -y verl

@@ -1,4 +1,4 @@
-# vllm: x86_64=0.20.2, aarch64=0.20.2
+# vllm: x86_64=0.25.1, aarch64=0.25.1
 
 ARG CUDA_VERSION=13.0.2
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu24.04
@@ -8,8 +8,8 @@ ARG PYTHON_VERSION=3.12
 ARG TORCH_VERSION=2.11.0
 ARG TORCH_VISION_VERSION=0.26.0
 ARG TORCH_AUDIO_VERSION=2.11.0
-ARG TRANSFORMERS_VERSION=5.3.0
-ARG VLLM_VERSION=0.23.0
+ARG TRANSFORMERS_VERSION=5.5.3
+ARG VLLM_VERSION=0.25.1
 ARG TRL_VERSION=0.27.0
 ARG TRANSFORMER_ENGINE_VERSION=v2.15
 ARG FLASH_ATTENTION_VERSION=2.8.3
@@ -123,21 +123,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     pip install --ignore-installed PyJWT
 
-# Apply two unmerged vLLM fixes required by verl weight-sync flows by patching in each
-# PR's cumulative diff (GitHub ".diff") with `git apply --3way`, rather than cherry-picking
-# commits or ranges. These PR branches are periodically rebased and even contain
-# "Merge branch 'main'" commits, so a "v${VLLM_VERSION}_fix..pr" range replays hundreds of
-# unrelated main commits and aborts on an empty/merge commit. The net diff carries only the
-# PR's own changes, so it stays small and stable regardless of how the branch is rebased.
-#   #44483: illegal memory access during a partial wake_up (sleep mode).
-#   #45589: FlashInfer-TRTLLM MoE load OOM.
-RUN git clone https://github.com/vllm-project/vllm.git && cd vllm && \
-    git checkout v${VLLM_VERSION} && \
-    curl -fsSL https://github.com/vllm-project/vllm/pull/44483.diff -o /tmp/vllm-pr-44483.diff && \
-    git apply --3way --whitespace=nowarn /tmp/vllm-pr-44483.diff && \
-    curl -fsSL https://github.com/vllm-project/vllm/pull/45589.diff -o /tmp/vllm-pr-45589.diff && \
-    git apply --3way --whitespace=nowarn /tmp/vllm-pr-45589.diff && \
-    MAX_JOBS=256 pip install -e .
+# vLLM >= 0.25.0 already contains the two sleep-mode fixes verl weight-sync relies on
+# (#45589 FlashInfer-TRTLLM MoE load OOM, in since v0.24.0; #44483 illegal memory access
+# during a partial wake_up, in since v0.25.0), so we install the released wheel directly
+# instead of patching a source checkout.
+RUN pip install vllm==${VLLM_VERSION}
 
 RUN pip3 install --no-deps trl==${TRL_VERSION}
 
