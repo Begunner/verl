@@ -168,7 +168,14 @@ def test_use_distributed_optimizer_passes_through(captured_args):
 
 
 def test_basic_optim_config_fields_pass_through(captured_args):
-    cfg = _base_optim_config(optimizer="sgd", lr=5e-4, min_lr=1e-5, clip_grad=0.5, weight_decay=0.1)
+    cfg = _base_optim_config(
+        optimizer="sgd",
+        lr=5e-4,
+        min_lr=1e-5,
+        clip_grad=0.5,
+        weight_decay=0.1,
+        betas=(0.8, 0.95),
+    )
     init_megatron_optim_config(cfg)
 
     assert captured_args["optimizer"] == "sgd"
@@ -176,6 +183,8 @@ def test_basic_optim_config_fields_pass_through(captured_args):
     assert captured_args["min_lr"] == pytest.approx(1e-5)
     assert captured_args["clip_grad"] == pytest.approx(0.5)
     assert captured_args["weight_decay"] == pytest.approx(0.1)
+    assert captured_args["adam_beta1"] == pytest.approx(0.8)
+    assert captured_args["adam_beta2"] == pytest.approx(0.95)
 
 
 def test_override_optimizer_config_overrides_branch_defaults(captured_args):
@@ -183,6 +192,7 @@ def test_override_optimizer_config_overrides_branch_defaults(captured_args):
         override_optimizer_config={
             "use_precision_aware_optimizer": False,
             "exp_avg_dtype": "sentinel-override",
+            "adam_beta2": 0.98,
         },
     )
     init_megatron_optim_config(cfg, bf16=True)
@@ -193,6 +203,7 @@ def test_override_optimizer_config_overrides_branch_defaults(captured_args):
     # … but non-overridden bf16 defaults remain.
     assert captured_args["main_grads_dtype"] is torch.bfloat16
     assert captured_args["exp_avg_sq_dtype"] is torch.bfloat16
+    assert captured_args["adam_beta2"] == pytest.approx(0.98)
 
 
 def test_missing_override_config_leaves_branch_defaults_intact(captured_args):

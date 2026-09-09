@@ -269,13 +269,15 @@ class VeOmniEngine(FSDPEngine):
         log_gpu_memory_usage("After offload model/optimizer/grad during init", logger=logger)
 
     def _build_optimizer(self, module):
-        optimizer = build_optimizer(
-            module,
-            lr=self.optimizer_config.lr,
-            betas=self.optimizer_config.betas,
-            weight_decay=self.optimizer_config.weight_decay,
-            optimizer_type=self.optimizer_config.optimizer,
-        )
+        optimizer_kwargs = {
+            "lr": self.optimizer_config.lr,
+            "betas": self.optimizer_config.betas,
+            "weight_decay": self.optimizer_config.weight_decay,
+            "optimizer_type": self.optimizer_config.optimizer,
+        }
+        if self.optimizer_config.override_optimizer_config:
+            optimizer_kwargs.update(self.optimizer_config.override_optimizer_config)
+        optimizer = build_optimizer(module, **optimizer_kwargs)
         get_optimizer_pre_hook = getattr(module, "get_optimizer_pre_hook", None)
         if get_optimizer_pre_hook is not None:
             optimizer_pre_hook = get_optimizer_pre_hook(module, module.config, self.data_parallel_mode)
@@ -285,6 +287,12 @@ class VeOmniEngine(FSDPEngine):
 
     def _build_lr_scheduler(self, optimizer):
         optim_config = self.optimizer_config
+        lr_warmup_ratio = optim_config.lr_warmup_steps_ratio
+        if optim_config.lr_warmup_steps is not None and optim_config.lr_warmup_steps > 0:
+            if optim_config.total_training_steps <= 0:
+                raise ValueError("total_training_steps must be positive when lr_warmup_steps is set")
+            lr_warmup_ratio = optim_config.lr_warmup_steps / optim_config.total_training_steps
+
         lr_scheduler = build_lr_scheduler(
             optimizer,
             train_steps=optim_config.total_training_steps,
@@ -292,7 +300,7 @@ class VeOmniEngine(FSDPEngine):
             lr_min=optim_config.lr_min,
             lr_decay_style=optim_config.lr_scheduler_type,
             lr_decay_ratio=optim_config.lr_decay_ratio,
-            lr_warmup_ratio=optim_config.lr_warmup_steps_ratio,
+            lr_warmup_ratio=lr_warmup_ratio,
             lr_start=optim_config.lr_start,
         )
 
